@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FlowTasks · GTD Productivity</title>
+  <style>
+    /* ─── FlowTasks Design System ─────────────────────────────────── */
+    :root {
+      --bg: #F7F8FC;
+      --surface: #FFFFFF;
+      --fg: #1A1A1A;
+      --muted: #6B7280;
+      --border: #E5E7EB;
+      --accent: #7C8CF5;
+      --accent-light: #EEF0FF;
+      --success: #6BCB77;
+      --success-light: #E8F5E9;
+      --warning: #FBBF24;
+      --warning-light: #FFFBEB;
+      --urgent: #F87171;
+      --urgent-light: #FFF3F3;
+      --context-casa: #FBC4AB;
+      --context-trabajo: #7DD6F0;
+      --context-personal: #D4B8FD;
+      --context-salud: #B2E87A;
+      --font-display: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --font-body: 'Inter', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --font-mono: ui-monospace, 'JetBrains Mono', Menlo, monospace;
+      --radius-sm: 12px;
+      --radius-md: 16px;
+      --radius-lg: 20px;
+      --radius-pill: 999px;
+      --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #E8EAF0;
+      font-family: var(--font-body);
+      -webkit-font-smoothing: antialiased;
+      display: flex; align-items: center; justify-content: center;
+    }
+    body { padding: 20px; }
+
+    /* ─── Phone Frame ─────────────────────────────────────────────── */
+    .phone {
+      width: 375px;
+      height: 812px;
+      background: var(--bg);
+      border-radius: 40px;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,0.08),
+        0 20px 60px rgba(0,0,0,0.15);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    .phone-notch {
+      height: 44px;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      flex-shrink: 0;
+    }
+    .phone-notch .time { font-size: 14px; font-weight: 600; color: var(--fg); }
+    .phone-notch .status { display: flex; gap: 4px; align-items: center; }
+    .phone-notch .status svg { width: 16px; height: 16px; color: var(--fg); }
+
+    /* ─── Screen Content ──────────────────────────────────────────── */
+    .screen-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+    }
+    .screen-content::-webkit-scrollbar { width: 0; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* ─── Bottom Nav ──────────────────────────────────────────────── */
+    .bottom-nav {
+      height: 72px;
+      background: var(--surface);
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-around;
+      padding-top: 8px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 10;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      padding: 0 8px;
+      position: relative;
+    }
+    .nav-item svg { width: 22px; height: 22px; color: #9CA3AF; transition: color 0.15s var(--ease-standard); }
+    .nav-item .nav-label {
+      font-size: 10px;
+      font-weight: 400;
+      color: #9CA3AF;
+      transition: color 0.15s var(--ease-standard);
+    }
+    .nav-item.active svg { color: var(--accent); }
+    .nav-item.active .nav-label { color: var(--accent); font-weight: 500; }
+    .nav-item .dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      background: transparent;
+      position: absolute;
+      bottom: -4px;
+    }
+    .nav-item.active .dot { background: var(--accent); }
+
+    /* ─── FAB ──────────────────────────────────────────────────────── */
+    .fab {
+      position: absolute;
+      bottom: 88px;
+      right: 16px;
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 4px 12px rgba(124,140,245,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 30;
+      border: none;
+      transition: transform 0.15s var(--ease-standard);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .fab:active { transform: scale(0.92); }
+    .fab svg { width: 24px; height: 24px; color: white; }
+
+    /* ─── Shared ──────────────────────────────────────────────────── */
+    .section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .section-label h3 { font-size: 16px; font-weight: 700; color: var(--fg); }
+    .section-label .see-all { font-size: 13px; font-weight: 500; color: var(--accent); cursor: pointer; }
+    .chip-pill {
+      display: inline-flex; align-items: center;
+      height: 34px; padding: 0 16px;
+      border-radius: var(--radius-pill);
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      border: 1px solid transparent;
+    }
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px;
+    }
+    .top-bar-left { display: flex; flex-direction: column; }
+    .top-bar-center { font-size: 20px; font-weight: 700; color: var(--fg); text-align: center; flex: 1; }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #D4B8FD);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: white;
+      flex-shrink: 0;
+    }
+    .task-compact {
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .task-compact .task-row {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .priority-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .context-chip {
+      display: inline-flex; align-items: center;
+      height: 26px; padding: 0 10px;
+      border-radius: var(--radius-pill);
+      font-size: 11px; font-weight: 500;
+    }
+    .task-full {
+      border-radius: var(--radius-md);
+      padding: 14px;
+      background: var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+    }
+    .task-full.completed {
+      background: #F8F9FA;
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .checkbox-round {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s var(--ease-standard);
+    }
+    .checkbox-round.checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .checkbox-round.checked svg { display: block; }
+    .checkbox-round svg { display: none; width: 14px; height: 14px; color: white; }
+    .checkbox-success {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--success);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .checkbox-success svg { width: 14px; height: 14px; color: white; }
+    .pill-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 14px 24px;
+      border-radius: var(--radius-pill);
+      font-size: 15px; font-weight: 600;
+      border: none;
+      cursor: pointer;
+      justify-content: center;
+      transition: opacity 0.15s var(--ease-standard);
+    }
+    .pill-btn:active { opacity: 0.85; }
+    .pill-btn-primary { background: var(--accent); color: white; }
+    .pill-btn-success { background: var(--success); color: white; }
+    .pill-btn-danger { background: white; border: 1px solid var(--urgent); color: var(--urgent); }
+    .pill-btn-outline { background: white; border: 1px solid var(--border); color: var(--fg); }
+    .pill-btn-full { width: 100%; }
+    .divider { height: 1px; background: #F3F4F6; margin: 0; }
+    .section-gap { padding: 20px; }
+
+    /* ─── Modals / Overlays ────────────────────────────────────────── */
+    .modal-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 50;
+    }
+    .modal-overlay.open { display: block; }
+    .modal-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.3);
+    }
+    .modal-sheet {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: white;
+      border-radius: 20px 20px 0 0;
+      padding: 20px;
+      max-height: 80%;
+      overflow-y: auto;
+      animation: slideUp 0.25s var(--ease-standard);
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+    .sheet-handle {
+      width: 40px; height: 4px;
+      background: var(--border);
+      border-radius: 999px;
+      margin: 0 auto 16px;
+    }
+    .full-modal {
+      display: none;
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      background: var(--bg);
+      animation: fadeIn 0.2s var(--ease-standard);
+    }
+    .full-modal.open { display: block; }
+    .full-modal .modal-content {
+      height: 100%;
+      overflow-y: auto;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* ─── Form Elements ────────────────────────────────────────────── */
+    .form-input {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: white;
+      font-family: var(--font-body);
+      font-size: 16px; font-weight: 500;
+      color: var(--fg);
+      outline: none;
+      transition: border-color 0.15s var(--ease-standard);
+    }
+    .form-input::placeholder { color: #9CA3AF; font-weight: 400; }
+    .form-input:focus { border-color: var(--accent); }
+    .form-textarea {
+      width: 100%;
+      height: 80px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: white;
+      font-family: var(--font-body);
+      font-size: 14px; font-weight: 400;
+      color: var(--fg);
+      outline: none;
+      resize: none;
+    }
+    .form-textarea::placeholder { color: #9CA3AF; }
+    .form-textarea:focus { border-color: var(--accent); }
+    .form-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+    }
+    .form-row-label { font-size: 14px; font-weight: 500; color: var(--muted); flex: 1; }
+    .form-row-value { font-size: 14px; font-weight: 400; color: #9CA3AF; }
+    .toggle-switch {
+      width: 44px; height: 24px;
+      border-radius: 12px;
+      background: var(--border);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s var(--ease-standard);
+      flex-shrink: 0;
+    }
+    .toggle-switch.on { background: var(--accent); }
+    .toggle-switch .knob {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: white;
+      position: absolute;
+      top: 2px; left: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+      transition: transform 0.2s var(--ease-standard);
+    }
+    .toggle-switch.on .knob { transform: translateX(20px); }
+
+    /* ─── Progress Bar ─────────────────────────────────────────────── */
+    .progress-bar {
+      width: 100%; height: 8px;
+      background: var(--accent-light);
+      border-radius: var(--radius-pill);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: var(--radius-pill);
+      transition: width 0.4s var(--ease-standard);
+    }
+
+    /* ─── Segmented Control ────────────────────────────────────────── */
+    .segmented {
+      display: flex;
+      background: #F3F4F6;
+      border-radius: 10px;
+      padding: 3px;
+      gap: 0;
+    }
+    .seg-item {
+      flex: 1;
+      text-align: center;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px; font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s var(--ease-standard);
+      user-select: none;
+    }
+    .seg-item.active {
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      color: var(--fg);
+    }
+
+    /* ─── Icons (Lucide style inline SVG) ──────────────────────────── */
+    .icon-22 { width: 22px; height: 22px; flex-shrink: 0; }
+    .icon-24 { width: 24px; height: 24px; flex-shrink: 0; }
+    .icon-20 { width: 20px; height: 20px; flex-shrink: 0; }
+    .icon-14 { width: 14px; height: 14px; flex-shrink: 0; }
+    .icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
+    .icon-18 { width: 18px; height: 18px; flex-shrink: 0; }
+    .icon-48 { width: 48px; height: 48px; flex-shrink: 0; }
+    .icon-40 { width: 40px; height: 40px; flex-shrink: 0; }
+    .icon-32 { width: 32px; height: 32px; flex-shrink: 0; }
+
+    /* ─── Scrollable chip row ──────────────────────────────────────── */
+    .chip-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 0 20px;
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .chip-scroll::-webkit-scrollbar { display: none; }
+
+    /* ─── Tools Grid ───────────────────────────────────────────────── */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 20px;
+    }
+    .tool-card {
+      border-radius: var(--radius-md);
+      padding: 20px;
+      background: var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.15s var(--ease-standard);
+    }
+    .tool-card:active { transform: scale(0.97); }
+    .tool-card.dashed {
+      border: 2px dashed var(--border);
+      background: transparent;
+      box-shadow: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .tool-icon-circle {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+    .tool-card-arrow {
+      align-self: flex-end;
+      margin-top: auto;
+    }
+
+    /* ─── Upload Area ──────────────────────────────────────────────── */
+    .upload-area {
+      margin: 20px;
+      border: 2px dashed #D1D5DB;
+      border-radius: var(--radius-md);
+      padding: 40px;
+      text-align: center;
+      cursor: pointer;
+    }
+    .upload-area p { margin-top: 8px; }
+
+    /* ─── Checklist Item ───────────────────────────────────────────── */
+    .checklist-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-radius: 14px;
+      padding: 14px;
+      background: var(--surface);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+      cursor: pointer;
+    }
+    .checklist-item .item-text { font-size: 14px; font-weight: 500; color: var(--fg); }
+    .checklist-item .item-sub { font-size: 12px; color: var(--muted); }
+
+    /* ─── Note Card ────────────────────────────────────────────────── */
+    .note-card {
+      background: #F7F8FC;
+      border-radius: var(--radius-sm);
+      padding: 12px;
+    }
+    .note-card .note-text { font-size: 13px; font-weight: 400; color: var(--fg); }
+    .note-card .note-ts { font-size: 11px; color: #9CA3AF; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="phone-notch">
+    <span class="time">9:41</span>
+    <div class="status">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 9l4 4-4 4"/><path d="M7 17h10l4-4-4-4H7"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 10h4v4H6z"/></svg>
+    </div>
+  </div>
+
+  <div class="screen-content" id="screenContent">
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 1: INICIO / DASHBOARD                                     -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="screen active" id="screen-inicio">
+      <div class="top-bar">
+        <div class="top-bar-left">
+          <span style="font-size:14px;font-weight:400;color:var(--muted);">Buenos días</span>
+          <span style="font-size:22px;font-weight:700;color:var(--fg);">Andrés</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <svg class="icon-14" viewBox="0 0 24 24" fill="#FBBF24" stroke="#FBBF24" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            <span style="font-size:14px;font-weight:600;color:#FBBF24;">12</span>
+          </div>
+          <div class="avatar">AN</div>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div style="display:flex;gap:10px;padding:0 20px;">
+        <div style="flex:1;height:80px;border-radius:16px;background:var(--accent-light);padding:14px;display:flex;flex-direction:column;justify-content:center;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="margin-bottom:4px;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span style="font-size:12px;font-weight:400;color:var(--muted);">Hoy</span>
+          <span style="font-size:24px;font-weight:700;color:var(--fg);">3</span>
+          <span style="font-size:11px;font-weight:400;color:var(--muted);">tareas</span>
+        </div>
+        <div style="flex:1;height:80px;border-radius:16px;background:var(--warning-light);padding:14px;display:flex;flex-direction:column;justify-content:center;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="#FBBF24" stroke-width="1.5" style="margin-bottom:4px;"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span style="font-size:12px;font-weight:400;color:var(--muted);">Inbox</span>
+          <span style="font-size:24px;font-weight:700;color:var(--fg);">5</span>
+          <span style="font-size:11px;font-weight:400;color:var(--muted);">pendientes</span>
+        </div>
+        <div style="flex:1;height:80px;border-radius:16px;background:var(--success-light);padding:14px;display:flex;flex-direction:column;justify-content:center;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="1.5" style="margin-bottom:4px;"><polyline points="20 6 9 17 4 12"/></svg>
+          <span style="font-size:12px;font-weight:400;color:var(--muted);">Hechas</span>
+          <span style="font-size:24px;font-weight:700;color:var(--fg);">12</span>
+          <span style="font-size:11px;font-weight:400;color:var(--muted);">completadas</span>
+        </div>
+      </div>
+
+      <!-- Próximas acciones -->
+      <div style="padding:20px 20px 8px;">
+        <div class="section-label">
+          <h3>Próximas acciones</h3>
+          <span class="see-all" onclick="showFullModal('screen-revision-semanal')">Ver todo</span>
+        </div>
+      </div>
+      <div style="padding:0 20px;display:flex;flex-direction:column;gap:8px;">
+        <div class="task-compact">
+          <div class="task-row">
+            <span class="priority-dot" style="background:var(--urgent);"></span>
+            <span class="context-chip" style="background:var(--context-casa);color:#7C2D12;">Casa</span>
+            <span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--muted);">10:00</span>
+          </div>
+          <div style="font-size:14px;font-weight:500;color:var(--fg);margin-top:4px;">Llamar al dentista</div>
+        </div>
+        <div class="task-compact">
+          <div class="task-row">
+            <span class="priority-dot" style="background:var(--warning);"></span>
+            <span class="context-chip" style="background:var(--context-trabajo);color:#1E3A8A;">Trabajo</span>
+            <span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--muted);">14:00</span>
+          </div>
+          <div style="font-size:14px;font-weight:500;color:var(--fg);margin-top:4px;">Revisar correo de cliente</div>
+        </div>
+      </div>
+
+      <!-- Vencen hoy -->
+      <div style="padding:20px 20px 8px;">
+        <h3 style="font-size:16px;font-weight:700;color:var(--fg);">Vencen hoy</h3>
+      </div>
+      <div style="padding:0 20px;">
+        <div class="task-full" style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="context-chip" style="background:var(--context-trabajo);color:#1E3A8A;">Trabajo</span>
+            <span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--urgent);">11:59 pm</span>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div>
+              <div style="font-size:15px;font-weight:600;color:var(--fg);">Informe de laboratorio</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:4px;">
+                <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="var(--urgent)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                <span style="font-size:12px;font-weight:400;color:var(--urgent);">Vence hoy</span>
+              </div>
+            </div>
+            <div class="checkbox-round" onclick="this.classList.toggle('checked')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div style="padding:40px 20px;text-align:center;">
+        <svg class="icon-48" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" stroke-width="1.5" style="margin:0 auto;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        <p style="margin-top:12px;font-size:14px;font-weight:400;color:var(--muted);">Todo al día. ¡Buen trabajo!</p>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 2: INBOX                                                  -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-inbox">
+      <div class="top-bar">
+        <span style="font-size:22px;font-weight:700;color:var(--fg);">Inbox</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:13px;font-weight:500;color:var(--accent);">Procesar todo</span>
+          <div style="width:20px;height:20px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;">
+            <span style="font-size:11px;font-weight:700;color:white;">5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Capture -->
+      <div style="padding:12px 20px;">
+        <div style="display:flex;align-items:center;gap:10px;border-radius:12px;background:white;border:1px solid var(--border);padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          <span style="flex:1;font-size:14px;font-weight:400;color:#9CA3AF;">Agregar tarea rápida...</span>
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        </div>
+      </div>
+
+      <!-- Inbox List -->
+      <div style="padding:0 20px;display:flex;flex-direction:column;gap:8px;">
+        <div class="inbox-item" style="border-radius:12px;padding:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);cursor:pointer;" onclick="openInboxModal(0)">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="6" height="6" viewBox="0 0 6 6" fill="#9CA3AF"><circle cx="3" cy="3" r="3"/></svg>
+            <span style="flex:1;font-size:15px;font-weight:400;color:var(--fg);">Comprar leche y pan</span>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">hace 2h</span>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;margin-top:10px;padding-top:8px;display:flex;align-items:center;gap:6px;">
+            <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">Toca para procesar</span>
+          </div>
+        </div>
+        <div class="inbox-item" style="border-radius:12px;padding:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);cursor:pointer;" onclick="openInboxModal(1)">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="6" height="6" viewBox="0 0 6 6" fill="#9CA3AF"><circle cx="3" cy="3" r="3"/></svg>
+            <span style="flex:1;font-size:15px;font-weight:400;color:var(--fg);">Pagar factura de electricidad</span>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">hace 5h</span>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;margin-top:10px;padding-top:8px;display:flex;align-items:center;gap:6px;">
+            <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">Toca para procesar</span>
+          </div>
+        </div>
+        <div class="inbox-item" style="border-radius:12px;padding:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);cursor:pointer;" onclick="openInboxModal(2)">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="6" height="6" viewBox="0 0 6 6" fill="#9CA3AF"><circle cx="3" cy="3" r="3"/></svg>
+            <span style="flex:1;font-size:15px;font-weight:400;color:var(--fg);">Programar revisión semanal</span>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">ayer</span>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;margin-top:10px;padding-top:8px;display:flex;align-items:center;gap:6px;">
+            <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">Toca para procesar</span>
+          </div>
+        </div>
+        <div class="inbox-item" style="border-radius:12px;padding:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);cursor:pointer;" onclick="openInboxModal(3)">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="6" height="6" viewBox="0 0 6 6" fill="#9CA3AF"><circle cx="3" cy="3" r="3"/></svg>
+            <span style="flex:1;font-size:15px;font-weight:400;color:var(--fg);">Comprar regalo cumpleaños mamá</span>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">ayer</span>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;margin-top:10px;padding-top:8px;display:flex;align-items:center;gap:6px;">
+            <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">Toca para procesar</span>
+          </div>
+        </div>
+        <div class="inbox-item" style="border-radius:12px;padding:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);cursor:pointer;" onclick="openInboxModal(4)">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <svg width="6" height="6" viewBox="0 0 6 6" fill="#9CA3AF"><circle cx="3" cy="3" r="3"/></svg>
+            <span style="flex:1;font-size:15px;font-weight:400;color:var(--fg);">Actualizar CV para nueva oferta</span>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">hace 2d</span>
+          </div>
+          <div style="border-top:1px solid #F3F4F6;margin-top:10px;padding-top:8px;display:flex;align-items:center;gap:6px;">
+            <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+            <span style="font-size:11px;font-weight:400;color:#9CA3AF;">Toca para procesar</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 3: TAREAS                                                 -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-tareas">
+      <div class="top-bar">
+        <span style="font-size:22px;font-weight:700;color:var(--fg);">Tareas</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        </div>
+      </div>
+
+      <!-- Filter Chips -->
+      <div class="chip-scroll">
+        <span class="chip-pill" style="background:var(--accent);color:white;">Todas</span>
+        <span class="chip-pill" style="background:white;color:var(--muted);border-color:var(--border);">@casa</span>
+        <span class="chip-pill" style="background:white;color:var(--muted);border-color:var(--border);">@trabajo</span>
+        <span class="chip-pill" style="background:white;color:var(--muted);border-color:var(--border);">@personal</span>
+        <span class="chip-pill" style="background:white;color:var(--muted);border-color:var(--border);">@salud</span>
+      </div>
+
+      <!-- Hoy section -->
+      <div style="padding:20px 20px 6px;">
+        <div class="section-label">
+          <h3>Hoy <span style="font-weight:400;font-size:13px;color:#9CA3AF;">(3)</span></h3>
+        </div>
+      </div>
+      <div style="padding:0 20px;display:flex;flex-direction:column;gap:8px;">
+        <div class="task-full" onclick="openTaskDetail()" style="cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="priority-dot" style="width:10px;height:10px;background:var(--urgent);"></span>
+            <span class="chip-pill" style="height:24px;padding:0 8px;font-size:11px;background:var(--urgent-light);color:var(--urgent);">Urgente</span>
+            <span class="context-chip" style="background:var(--context-salud);color:#1B5E20;margin-left:auto;">@salud</span>
+          </div>
+          <div style="font-size:16px;font-weight:600;color:var(--fg);margin-top:8px;">Llamar al dentista</div>
+          <div style="font-size:13px;font-weight:400;color:var(--muted);margin-top:2px;">Confirmar cita de las 10:00</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="var(--urgent)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span style="font-size:12px;font-weight:400;color:var(--urgent);">Vence hoy · 10:00 am</span>
+            </div>
+            <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="task-full" onclick="openTaskDetail()" style="cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="priority-dot" style="width:10px;height:10px;background:var(--warning);"></span>
+            <span class="context-chip" style="background:var(--context-trabajo);color:#1E3A8A;margin-left:auto;">@trabajo</span>
+          </div>
+          <div style="font-size:16px;font-weight:600;color:var(--fg);margin-top:8px;">Informe trimestral</div>
+          <div style="font-size:13px;font-weight:400;color:var(--muted);margin-top:2px;">Preparar presentación para el equipo</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span style="font-size:12px;font-weight:400;color:var(--muted);">Hoy · 5:00 pm</span>
+            </div>
+            <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Completed task -->
+        <div class="task-full completed">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="checkbox-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div style="font-size:15px;font-weight:500;color:#9CA3AF;text-decoration:line-through;">Sacar la basura</div>
+              <div style="font-size:12px;font-weight:400;color:#9CA3AF;">Completado ayer</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Esta semana -->
+      <div style="padding:8px 20px 6px;">
+        <div class="section-label">
+          <h3>Esta semana <span style="font-weight:400;font-size:13px;color:#9CA3AF;">(2)</span></h3>
+        </div>
+      </div>
+      <div style="padding:0 20px;display:flex;flex-direction:column;gap:8px;padding-bottom:20px;">
+        <div class="task-full" style="cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="priority-dot" style="width:10px;height:10px;background:var(--success);"></span>
+            <span class="context-chip" style="background:var(--context-casa);color:#7C2D12;margin-left:auto;">@casa</span>
+          </div>
+          <div style="font-size:16px;font-weight:600;color:var(--fg);margin-top:8px;">Limpiar el garaje</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span style="font-size:12px;font-weight:400;color:var(--muted);">vie 20 jun</span>
+            </div>
+            <div class="checkbox-round" onclick="this.classList.toggle('checked')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+        <div class="task-full" style="cursor:pointer;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="priority-dot" style="width:10px;height:10px;background:var(--warning);"></span>
+            <span class="context-chip" style="background:var(--context-personal);color:#5B21B6;margin-left:auto;">@personal</span>
+          </div>
+          <div style="font-size:16px;font-weight:600;color:var(--fg);margin-top:8px;">Leer el libro de productividad</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <svg class="icon-14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span style="font-size:12px;font-weight:400;color:var(--muted);">sáb 21 jun</span>
+            </div>
+            <div class="checkbox-round" onclick="this.classList.toggle('checked')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 4: UTILIDADES                                             -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-utilidades">
+      <div style="padding:20px;">
+        <span style="font-size:22px;font-weight:700;color:var(--fg);">Utilidades</span>
+      </div>
+      <div class="tools-grid">
+        <div class="tool-card" onclick="showFullModal('screen-convertir-img')">
+          <div class="tool-icon-circle" style="background:var(--accent-light);">
+            <svg class="icon-24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          </div>
+          <div style="font-size:15px;font-weight:600;color:var(--fg);">Convertir imágenes</div>
+          <div style="font-size:12px;font-weight:400;color:var(--muted);margin-top:2px;">PNG ↔ ICO, quitar fondo</div>
+          <svg class="icon-16 tool-card-arrow" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+        <div class="tool-card" onclick="showFullModal('screen-transcribir')">
+          <div class="tool-icon-circle" style="background:#F3EEFF;">
+            <svg class="icon-24" viewBox="0 0 24 24" fill="none" stroke="#D4B8FD" stroke-width="1.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+          </div>
+          <div style="font-size:15px;font-weight:600;color:var(--fg);">Transcribir audio</div>
+          <div style="font-size:12px;font-weight:400;color:var(--muted);margin-top:2px;">Audio a texto</div>
+          <svg class="icon-16 tool-card-arrow" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+        <div class="tool-card" onclick="showFullModal('screen-transcribir')">
+          <div class="tool-icon-circle" style="background:var(--urgent-light);">
+            <svg class="icon-24" viewBox="0 0 24 24" fill="none" stroke="var(--urgent)" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          </div>
+          <div style="font-size:15px;font-weight:600;color:var(--fg);">Video a texto/audio</div>
+          <div style="font-size:12px;font-weight:400;color:var(--muted);margin-top:2px;">Extraer texto o audio</div>
+          <svg class="icon-16 tool-card-arrow" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </div>
+        <div class="tool-card dashed">
+          <svg class="icon-32" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          <div style="font-size:13px;font-weight:400;color:#9CA3AF;text-align:center;">Próximamente</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 5: PERFIL (tab 5 - minimal)                                -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="screen-perfil">
+      <div style="padding:20px;text-align:center;">
+        <div class="avatar" style="width:72px;height:72px;font-size:28px;margin:20px auto;">AN</div>
+        <h2 style="font-size:22px;font-weight:700;color:var(--fg);margin-top:12px;">Andrés</h2>
+        <p style="font-size:14px;color:var(--muted);margin-top:4px;">andres@flowtasks.app</p>
+      </div>
+      <div style="padding:0 20px;">
+        <div style="display:flex;gap:8px;justify-content:center;">
+          <div style="flex:1;text-align:center;padding:14px;border-radius:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+            <span style="font-size:22px;font-weight:700;color:var(--fg);">12</span>
+            <p style="font-size:12px;color:var(--muted);">Racha</p>
+          </div>
+          <div style="flex:1;text-align:center;padding:14px;border-radius:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+            <span style="font-size:22px;font-weight:700;color:var(--fg);">47</span>
+            <p style="font-size:12px;color:var(--muted);">Completadas</p>
+          </div>
+          <div style="flex:1;text-align:center;padding:14px;border-radius:14px;background:white;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+            <span style="font-size:22px;font-weight:700;color:var(--fg);">8</span>
+            <p style="font-size:12px;color:var(--muted);">Pendientes</p>
+          </div>
+        </div>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:2px;">
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 0;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span style="font-size:16px;font-weight:500;color:var(--fg);">Configuración</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 0;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          <span style="font-size:16px;font-weight:500;color:var(--fg);">Ayuda y soporte</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 0;">
+          <svg class="icon-22" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span style="font-size:16px;font-weight:500;color:var(--fg);">Cerrar sesión</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- BOTTOM NAV                                                          -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="bottom-nav">
+    <div class="nav-item active" data-tab="inicio" onclick="switchTab('inicio')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      <span class="nav-label">Inicio</span>
+      <span class="dot"></span>
+    </div>
+    <div class="nav-item" data-tab="inbox" onclick="switchTab('inbox')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+      <span class="nav-label">Inbox</span>
+      <span class="dot"></span>
+    </div>
+    <div class="nav-item" data-tab="tareas" onclick="switchTab('tareas')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <span class="nav-label">Tareas</span>
+      <span class="dot"></span>
+    </div>
+    <div class="nav-item" data-tab="utilidades" onclick="switchTab('utilidades')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+      <span class="nav-label">Utilidades</span>
+      <span class="dot"></span>
+    </div>
+    <div class="nav-item" data-tab="perfil" onclick="switchTab('perfil')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span class="nav-label">Perfil</span>
+      <span class="dot"></span>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FAB                                                                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <button class="fab" onclick="showFullModal('screen-nueva-tarea')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- PROCESS INBOX MODAL (bottom sheet)                                  -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="inbox-modal">
+    <div class="modal-backdrop" onclick="closeInboxModal()"></div>
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <h3 style="font-size:18px;font-weight:700;color:var(--fg);margin-bottom:12px;">Procesar tarea</h3>
+      <p id="inbox-modal-text" style="font-size:16px;font-weight:400;color:var(--muted);margin-bottom:16px;">Comprar leche y pan</p>
+
+      <div style="margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:8px;">Contexto</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:var(--context-casa);color:#7C2D12;cursor:pointer;" onclick="selectContext(this)">@casa</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@trabajo</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@personal</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@salud</span>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid #F3F4F6;cursor:pointer;">
+        <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span style="font-size:14px;font-weight:400;color:var(--muted);">Asignar fecha</span>
+      </div>
+
+      <div style="padding:12px 0;border-top:1px solid #F3F4F6;">
+        <div style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:8px;">Prioridad</div>
+        <div style="display:flex;gap:10px;">
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:12px;background:var(--success-light);color:#2E7D32;cursor:pointer;" onclick="selectPriority(this)">Baja</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:12px;background:var(--warning-light);color:#F57F17;cursor:pointer;" onclick="selectPriority(this)">Media</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:12px;background:var(--urgent-light);color:#D32F2F;cursor:pointer;" onclick="selectPriority(this)">Alta</span>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:space-between;gap:12px;margin-top:16px;">
+        <button style="font-size:14px;font-weight:500;color:var(--urgent);background:none;border:none;cursor:pointer;padding:12px 0;">Eliminar</button>
+        <button class="pill-btn pill-btn-primary" style="padding:12px 32px;font-size:14px;" onclick="closeInboxModal()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FULL SCREEN MODAL: NUEVA TAREA                                      -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="full-modal" id="screen-nueva-tarea">
+    <div class="modal-content">
+      <div style="display:flex;align-items:center;padding:20px;">
+        <span style="cursor:pointer;font-size:24px;font-weight:400;color:var(--muted);" onclick="hideFullModal('screen-nueva-tarea')">✕</span>
+        <span style="flex:1;text-align:center;font-size:20px;font-weight:700;color:var(--fg);">Nueva tarea</span>
+        <span style="font-size:15px;font-weight:600;color:var(--accent);cursor:pointer;" onclick="hideFullModal('screen-nueva-tarea')">Guardar</span>
+      </div>
+
+      <div style="padding:0 20px;display:flex;flex-direction:column;gap:16px;">
+        <input class="form-input" type="text" placeholder="Título de la tarea" />
+        <textarea class="form-textarea" placeholder="Descripción (opcional)"></textarea>
+      </div>
+
+      <div class="divider" style="margin:16px 20px;"></div>
+
+      <div style="padding:0 20px;">
+        <div style="font-size:14px;font-weight:500;color:var(--muted);margin-bottom:8px;">Contexto</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@casa</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@trabajo</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@personal</span>
+          <span class="chip-pill" style="height:32px;padding:0 14px;font-size:13px;background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;" onclick="selectContext(this)">@salud</span>
+        </div>
+      </div>
+
+      <div style="padding:0 20px;">
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span class="form-row-label">Fecha</span>
+          <span class="form-row-value">Sin fecha</span>
+          <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#9CA3AF;"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          <span class="form-row-label">Prioridad</span>
+          <div style="display:flex;gap:6px;flex:1;justify-content:flex-end;">
+            <span class="chip-pill" style="height:28px;padding:0 10px;font-size:11px;background:var(--success-light);color:#2E7D32;cursor:pointer;" onclick="selectPriority(this)">Baja</span>
+            <span class="chip-pill" style="height:28px;padding:0 10px;font-size:11px;background:var(--warning-light);color:#F57F17;cursor:pointer;" onclick="selectPriority(this)">Media</span>
+            <span class="chip-pill" style="height:28px;padding:0 10px;font-size:11px;background:var(--urgent-light);color:#D32F2F;cursor:pointer;" onclick="selectPriority(this)">Alta</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span class="form-row-label">Recordatorio</span>
+          <div class="toggle-switch" onclick="this.classList.toggle('on')">
+            <div class="knob"></div>
+          </div>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span class="form-row-label">Repetir</span>
+          <span class="form-row-value">No repetir</span>
+          <svg class="icon-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#9CA3AF;"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      </div>
+
+      <div style="padding:20px;">
+        <button class="pill-btn pill-btn-primary pill-btn-full" onclick="hideFullModal('screen-nueva-tarea')">Crear tarea</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FULL SCREEN MODAL: DETALLE DE TAREA                                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="full-modal" id="screen-detalle-tarea">
+    <div class="modal-content">
+      <div style="display:flex;align-items:center;padding:20px;">
+        <svg class="icon-24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5" style="cursor:pointer;" onclick="hideFullModal('screen-detalle-tarea')"><polyline points="15 18 9 12 15 6"/></svg>
+        <span style="flex:1;text-align:center;font-size:20px;font-weight:700;color:var(--fg);">Detalle</span>
+        <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </div>
+
+      <div style="margin:0 20px;border-radius:var(--radius-md);padding:20px;background:var(--surface);box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="priority-dot" style="width:10px;height:10px;background:var(--urgent);"></span>
+          <span class="context-chip" style="background:var(--context-trabajo);color:#1E3A8A;">@trabajo</span>
+          <span style="margin-left:auto;font-size:12px;font-weight:400;color:var(--warning);">Pendiente</span>
+        </div>
+        <h2 style="font-size:20px;font-weight:700;color:var(--fg);margin-top:12px;">Informe de laboratorio</h2>
+        <p style="font-size:14px;font-weight:400;color:var(--muted);line-height:1.5;margin-top:6px;">Entregar reporte de práctica 3 en plataforma Canvas</p>
+      </div>
+
+      <div style="margin:20px;display:flex;flex-direction:column;gap:4px;">
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          <span style="font-size:13px;font-weight:500;color:var(--muted);">Vence</span>
+          <span style="margin-left:auto;font-size:14px;font-weight:400;color:var(--urgent);">hoy · 11:59 pm</span>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          <span style="font-size:13px;font-weight:500;color:var(--muted);">Contexto</span>
+          <span class="context-chip" style="background:var(--context-trabajo);color:#1E3A8A;margin-left:auto;">@trabajo</span>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          <span style="font-size:13px;font-weight:500;color:var(--muted);">Prioridad</span>
+          <span class="chip-pill" style="height:26px;padding:0 10px;font-size:11px;background:var(--urgent-light);color:#D32F2F;margin-left:auto;">Alta</span>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span style="font-size:13px;font-weight:500;color:var(--muted);">Creada</span>
+          <span style="margin-left:auto;font-size:14px;font-weight:400;color:var(--muted);">15 jun 2026</span>
+        </div>
+        <div class="form-row">
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span style="font-size:13px;font-weight:500;color:var(--muted);">Recordatorio</span>
+          <span style="margin-left:auto;font-size:14px;font-weight:400;color:var(--muted);">15 min antes</span>
+        </div>
+      </div>
+
+      <div style="margin:0 20px;display:flex;flex-direction:column;gap:10px;">
+        <button class="pill-btn pill-btn-success pill-btn-full" onclick="hideFullModal('screen-detalle-tarea')">Marcar como completada</button>
+        <button class="pill-btn pill-btn-danger pill-btn-full" onclick="hideFullModal('screen-detalle-tarea')">Eliminar tarea</button>
+      </div>
+
+      <div style="margin:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <h4 style="font-size:14px;font-weight:700;color:var(--fg);">Notas</h4>
+          <svg class="icon-20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" style="cursor:pointer;"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+        </div>
+        <div class="note-card" style="margin-top:10px;">
+          <p class="note-text">Recordar incluir gráficos de la práctica anterior como referencia.</p>
+          <p class="note-ts">Ayer · 4:32 pm</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FULL SCREEN MODAL: REVISIÓN SEMANAL                                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="full-modal" id="screen-revision-semanal">
+    <div class="modal-content">
+      <div style="padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <h2 style="font-size:22px;font-weight:700;color:var(--fg);">Revisión semanal</h2>
+          <span style="font-size:13px;font-weight:500;color:var(--accent);">Programar</span>
+        </div>
+      </div>
+
+      <div style="padding:0 20px;">
+        <div class="progress-bar">
+          <div class="progress-fill" style="width:40%;"></div>
+        </div>
+        <p style="text-align:center;font-size:13px;font-weight:400;color:var(--muted);margin-top:8px;">2 de 5 completado</p>
+      </div>
+
+      <div style="padding:20px;display:flex;flex-direction:column;gap:10px;">
+        <div class="checklist-item" onclick="toggleChecklist(this)">
+          <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="item-text">Procesar inbox</div>
+            <div class="item-sub">5 items pendientes</div>
+          </div>
+        </div>
+        <div class="checklist-item" onclick="toggleChecklist(this)">
+          <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="item-text">Revisar vencidas</div>
+            <div class="item-sub">2 tareas vencidas</div>
+          </div>
+        </div>
+        <div class="checklist-item" onclick="toggleChecklist(this)">
+          <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="item-text">Actualizar próximas acciones</div>
+          </div>
+        </div>
+        <div class="checklist-item" onclick="toggleChecklist(this)">
+          <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="item-text">Revisar proyectos</div>
+          </div>
+        </div>
+        <div class="checklist-item" onclick="toggleChecklist(this)">
+          <div class="checkbox-round" onclick="event.stopPropagation();this.classList.toggle('checked')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="item-text">Limpiar completadas</div>
+            <div class="item-sub">8 tareas para archivar</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:20px;">
+        <button class="pill-btn pill-btn-primary pill-btn-full" onclick="hideFullModal('screen-revision-semanal')">Completar revisión</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FULL SCREEN MODAL: CONVERTIR IMÁGENES (tool detail)                 -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="full-modal" id="screen-convertir-img">
+    <div class="modal-content">
+      <div style="display:flex;align-items:center;padding:20px;">
+        <svg class="icon-24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5" style="cursor:pointer;" onclick="hideFullModal('screen-convertir-img')"><polyline points="15 18 9 12 15 6"/></svg>
+        <span style="flex:1;text-align:center;font-size:20px;font-weight:700;color:var(--fg);">Convertir imágenes</span>
+      </div>
+
+      <div class="upload-area">
+        <svg class="icon-40" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" style="margin:0 auto;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p style="font-size:15px;font-weight:500;color:var(--fg);margin-top:12px;">Toca para seleccionar imagen</p>
+        <p style="font-size:13px;font-weight:400;color:#9CA3AF;">PNG, JPG, WEBP</p>
+      </div>
+
+      <div style="margin:0 20px;">
+        <p style="font-size:14px;font-weight:500;color:var(--muted);margin-bottom:8px;">Convertir a</p>
+        <div style="display:flex;gap:8px;">
+          <span class="chip-pill" style="background:var(--accent);color:white;cursor:pointer;">ICO</span>
+          <span class="chip-pill" style="background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;">JPG</span>
+          <span class="chip-pill" style="background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;">WEBP</span>
+          <span class="chip-pill" style="background:white;border:1px solid var(--border);color:var(--muted);cursor:pointer;">PNG</span>
+        </div>
+      </div>
+
+      <div style="margin:20px;display:flex;flex-direction:column;gap:10px;">
+        <button class="pill-btn pill-btn-primary pill-btn-full">
+          <svg class="icon-18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16.5 9.4 7.55 4.24a1 1 0 0 0-1.52.76v14.08a1 1 0 0 0 1.52.76L16.5 14.6a1 1 0 0 0 0-1.2z"/></svg>
+          Quitar fondo
+        </button>
+        <button class="pill-btn pill-btn-outline pill-btn-full">Convertir formato</button>
+      </div>
+
+      <div style="margin:20px;text-align:center;">
+        <div style="width:200px;height:200px;background:#F3F4F6;border-radius:var(--radius-md);margin:0 auto;display:flex;align-items:center;justify-content:center;">
+          <svg class="icon-48" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </div>
+        <p style="font-size:12px;font-weight:400;color:#9CA3AF;margin-top:8px;">Sin imagen seleccionada</p>
+      </div>
+
+      <div style="margin:20px;display:flex;gap:10px;">
+        <button class="pill-btn pill-btn-outline" style="flex:1;">Compartir</button>
+        <button class="pill-btn pill-btn-primary" style="flex:1;">Descargar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- FULL SCREEN MODAL: TRANSCRIBIR AUDIO / VIDEO                        -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <div class="full-modal" id="screen-transcribir">
+    <div class="modal-content">
+      <div style="display:flex;align-items:center;padding:20px;">
+        <svg class="icon-24" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" stroke-width="1.5" style="cursor:pointer;" onclick="hideFullModal('screen-transcribir')"><polyline points="15 18 9 12 15 6"/></svg>
+        <span style="flex:1;text-align:center;font-size:20px;font-weight:700;color:var(--fg);">Transcribir</span>
+      </div>
+
+      <div style="margin:0 20px;">
+        <div class="segmented">
+          <span class="seg-item active" onclick="switchTranscribeTab(this)">Audio</span>
+          <span class="seg-item" onclick="switchTranscribeTab(this)">Video</span>
+        </div>
+      </div>
+
+      <div id="transcribe-audio" class="upload-area" style="margin:20px;">
+        <svg class="icon-40" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" style="margin:0 auto;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+        <p style="font-size:15px;font-weight:500;color:var(--fg);margin-top:12px;">Toca para seleccionar audio</p>
+        <p style="font-size:13px;font-weight:400;color:#9CA3AF;">MP3, WAV, M4A, AAC</p>
+      </div>
+
+      <div id="transcribe-video" class="upload-area" style="margin:20px;display:none;">
+        <svg class="icon-40" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" stroke-width="1.5" style="margin:0 auto;"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <p style="font-size:15px;font-weight:500;color:var(--fg);margin-top:12px;">Seleccionar video</p>
+        <p style="font-size:13px;font-weight:400;color:#9CA3AF;">MP4, MOV, AVI</p>
+      </div>
+
+      <div style="margin:20px;">
+        <button class="pill-btn pill-btn-primary pill-btn-full" onclick="hideFullModal('screen-transcribir')">Iniciar transcripción</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+  <!-- Inline action: Revisión Semanal (from Inicio)                       -->
+  <!-- ═══════════════════════════════════════════════════════════════════ -->
+</div>
+
+<script>
+  // ─── Tab Switching ─────────────────────────────────────────────────
+  function switchTab(tab) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('screen-' + tab).classList.add('active');
+    document.querySelector('.nav-item[data-tab="' + tab + '"]').classList.add('active');
+    document.getElementById('screenContent').scrollTop = 0;
+  }
+
+  // ─── Full Screen Modals ───────────────────────────────────────────
+  function showFullModal(id) {
+    document.getElementById(id).classList.add('open');
+  }
+  function hideFullModal(id) {
+    document.getElementById(id).classList.remove('open');
+  }
+
+  // ─── Inbox Process Modal ──────────────────────────────────────────
+  const inboxItems = [
+    'Comprar leche y pan',
+    'Pagar factura de electricidad',
+    'Programar revisión semanal',
+    'Comprar regalo cumpleaños mamá',
+    'Actualizar CV para nueva oferta'
+  ];
+  function openInboxModal(idx) {
+    document.getElementById('inbox-modal-text').textContent = inboxItems[idx];
+    document.getElementById('inbox-modal').classList.add('open');
+  }
+  function closeInboxModal() {
+    document.getElementById('inbox-modal').classList.remove('open');
+  }
+
+  // ─── Chip Selection (context / priority) ──────────────────────────
+  function selectContext(el) {
+    const parent = el.parentElement;
+    parent.querySelectorAll('.chip-pill').forEach(c => {
+      const isSelected = c === el && (!c.dataset.selected || c.dataset.selected === 'false');
+      if (isSelected) {
+        c.dataset.selected = 'true';
+        if (c.textContent.includes('casa')) { c.style.background = 'var(--context-casa)'; c.style.color = '#7C2D12'; c.style.borderColor = 'transparent'; }
+        else if (c.textContent.includes('trabajo')) { c.style.background = 'var(--context-trabajo)'; c.style.color = '#1E3A8A'; c.style.borderColor = 'transparent'; }
+        else if (c.textContent.includes('personal')) { c.style.background = 'var(--context-personal)'; c.style.color = '#5B21B6'; c.style.borderColor = 'transparent'; }
+        else if (c.textContent.includes('salud')) { c.style.background = 'var(--context-salud)'; c.style.color = '#1B5E20'; c.style.borderColor = 'transparent'; }
+      } else {
+        c.dataset.selected = 'false';
+        c.style.background = 'white';
+        c.style.color = 'var(--muted)';
+        c.style.borderColor = 'var(--border)';
+      }
+    });
+  }
+
+  function selectPriority(el) {
+    const parent = el.parentElement;
+    parent.querySelectorAll('.chip-pill').forEach(c => {
+      if (c === el) {
+        c.dataset.selected = 'true';
+        if (c.textContent.includes('Baja')) { c.style.background = 'var(--success-light)'; c.style.color = '#2E7D32'; }
+        else if (c.textContent.includes('Media')) { c.style.background = 'var(--warning-light)'; c.style.color = '#F57F17'; }
+        else if (c.textContent.includes('Alta')) { c.style.background = 'var(--urgent-light)'; c.style.color = '#D32F2F'; }
+        c.style.borderColor = 'transparent';
+      } else {
+        c.dataset.selected = 'false';
+        c.style.background = 'white';
+        c.style.color = 'var(--muted)';
+        c.style.borderColor = 'var(--border)';
+      }
+    });
+  }
+
+  // ─── Transcribe Tabs ──────────────────────────────────────────────
+  function switchTranscribeTab(el) {
+    const parent = el.parentElement;
+    parent.querySelectorAll('.seg-item').forEach(s => s.classList.remove('active'));
+    el.classList.add('active');
+    const isAudio = el.textContent.trim() === 'Audio';
+    document.getElementById('transcribe-audio').style.display = isAudio ? 'block' : 'none';
+    document.getElementById('transcribe-video').style.display = isAudio ? 'none' : 'block';
+  }
+
+  // ─── Checklist Toggle ─────────────────────────────────────────────
+  function toggleChecklist(el) {
+    const cb = el.querySelector('.checkbox-round');
+    if (cb) cb.classList.toggle('checked');
+  }
+
+  // ─── Open Task Detail ─────────────────────────────────────────────
+  function openTaskDetail() {
+    showFullModal('screen-detalle-tarea');
+  }
+
+  // ─── Close modals on backdrop click ───────────────────────────────
+  document.getElementById('inbox-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeInboxModal();
+  });
+</script>
+
+</body>
+</html>

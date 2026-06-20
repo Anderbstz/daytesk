@@ -1,0 +1,64 @@
+# openspec/config.yaml
+schema: spec-driven
+
+context: |
+  Tech stack: Android (Kotlin 2.3.20, Jetpack Compose BOM 2026.03.01, Material3)
+  Architecture: MVVM (ViewModel + DataRepository), Navigation3 multi-pane
+  Build: Gradle 9.1.0 + AGP 9.0.1, compileSdk 36, minSdk 26, targetSdk 36
+  Testing: JUnit 4 + kotlinx-coroutines-test (unit), Compose UI Test + AndroidX Test + Espresso (instrumented)
+  Style: Kotlin official code style, R8 minification disabled (debug), Compose compiler enabled
+  Theme: Material3 dynamic color, dark/light support
+
+strict_tdd: true
+
+testing:
+  unit:
+    command: ./gradlew test
+    framework: JUnit 4.13.2
+    layers:
+      - name: Unit
+        available: true
+        tool: JUnit 4 + kotlinx-coroutines-test 1.10.2
+      - name: Integration (instrumented)
+        available: true
+        tool: Compose UI Test JUnit4 + AndroidX Test Runner + Espresso Core 3.7.0
+      - name: E2E
+        available: false
+        tool: "(none configured)"
+  coverage:
+    available: false
+    command: "(none — add JaCoCo or Kover)"
+  quality:
+    linter:
+      available: false
+      command: "(none — add detekt or ktlint)"
+    type_checker:
+      available: true
+      command: kotlinc (via Gradle compileKotlin task)
+    formatter:
+      available: false
+      command: "(none — add ktlint or spotless)"
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes
+    - Scope each proposal to a single cohesive change
+  specs:
+    - Use Given/When/Then for scenarios
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY)
+  design:
+    - Include sequence diagrams for complex flows
+    - Document architecture decisions with rationale
+  tasks:
+    - Group by phase, use hierarchical numbering
+    - Keep tasks completable in one session
+  apply:
+    - Follow existing code patterns
+    tdd: true
+    test_command: ./gradlew test
+  verify:
+    test_command: ./gradlew test
+    build_command: ./gradlew assembleDebug
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas

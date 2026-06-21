@@ -27,6 +27,12 @@ object DayteskColors {
     val ContextPersonal = Color(0xFFD4B8FD)
     val ContextSalud = Color(0xFFB2E87A)
 
+    // Context text
+    val ContextCasaText = Color(0xFF7C2D12)
+    val ContextTrabajoText = Color(0xFF1E3A8A)
+    val ContextPersonalText = Color(0xFF5B21B6)
+    val ContextSaludText = Color(0xFF1B5E20)
+
     // Text
     val TextPrimary = Color(0xFF1A1A1A)
     val TextSecondary = Color(0xFF6B7280)
@@ -54,6 +60,11 @@ object DayteskDarkColors {
     val ContextTrabajo = Color(0xFF7DD6F0).copy(alpha = 0.7f)
     val ContextPersonal = Color(0xFFD4B8FD).copy(alpha = 0.7f)
     val ContextSalud = Color(0xFFB2E87A).copy(alpha = 0.7f)
+
+    val ContextCasaText = Color(0xFFFBC4AB)
+    val ContextTrabajoText = Color(0xFF7DD6F0)
+    val ContextPersonalText = Color(0xFFD4B8FD)
+    val ContextSaludText = Color(0xFFB2E87A)
 
     val TextPrimary = Color(0xFFF0F0F4)
     val TextSecondary = Color(0xFF9CA3AF)

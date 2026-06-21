@@ -134,9 +134,28 @@ private fun DayteskNavScaffold(data: DayteskData) {
                 .fillMaxSize()
                 .padding(paddingValues),
             entryProvider = entryProvider {
-                entry<Inicio> { InicioScreen(data) }
-                entry<Inbox> { InboxScreen(data) }
-                entry<Tareas> { TareasScreen(data) }
+                entry<Inicio> {
+                    InicioScreen(
+                        data = data,
+                        onTaskClick = { /* TODO: navigate to detail */ },
+                        onTaskToggle = { _, _ -> /* TODO: implement */ },
+                        onSeeAll = { /* TODO: navigate to tareas tab */ },
+                    )
+                }
+                entry<Inbox> {
+                    InboxScreen(
+                        data = data,
+                        onItemClick = { /* TODO: open process modal */ },
+                        onProcessAll = { /* TODO: process all */ },
+                    )
+                }
+                entry<Tareas> {
+                    TareasScreen(
+                        data = data,
+                        onTaskClick = { /* TODO: navigate to detail */ },
+                        onTaskToggle = { _, _ -> /* TODO: implement */ },
+                    )
+                }
                 entry<Utilidades> { UtilidadesScreen(data) }
                 entry<Perfil> { PerfilScreen(data) }
             },

@@ -27,6 +27,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,12 +39,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.nuitcode.daytesk.data.DataRepository
 import com.nuitcode.daytesk.data.DayteskData
 import com.nuitcode.daytesk.data.DefaultDataRepository
+import com.nuitcode.daytesk.data.local.AppDatabase
+import com.nuitcode.daytesk.data.local.InboxItemDao
+import com.nuitcode.daytesk.data.local.TareaDao
+import com.nuitcode.daytesk.data.local.toEntity
+import com.nuitcode.daytesk.model.InboxItem
+import com.nuitcode.daytesk.model.Tarea
+import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -48,10 +60,13 @@ import com.nuitcode.daytesk.ui.inbox.InboxScreen
 import com.nuitcode.daytesk.ui.inicio.InicioScreen
 import com.nuitcode.daytesk.ui.main.DayteskUiState
 import com.nuitcode.daytesk.ui.main.MainScreenViewModel
+import com.nuitcode.daytesk.ui.modals.DetalleTareaModal
+import com.nuitcode.daytesk.ui.modals.NuevaTareaModal
+import com.nuitcode.daytesk.ui.modals.ProcesarInboxModal
 import com.nuitcode.daytesk.ui.perfil.PerfilScreen
 import com.nuitcode.daytesk.ui.tareas.TareasScreen
 import com.nuitcode.daytesk.ui.utilidades.UtilidadesScreen
-import androidx.navigation3.runtime.NavKey
+import kotlinx.coroutines.launch
 
 private data class TabItem(
     val key: NavKey,
@@ -67,19 +82,136 @@ private val tabs = listOf(
     TabItem(Perfil, Icons.Default.Person, "Perfil"),
 )
 
+// ── Production entry point ────────────────────────────────────
+
 @Composable
 fun DayteskApp(
-    dataRepository: DataRepository = DefaultDataRepository(),
+    database: AppDatabase,
+) {
+    val tareaDao = database.tareaDao()
+    val inboxItemDao = database.inboxItemDao()
+    val repository = remember { DefaultDataRepository(tareaDao, inboxItemDao) }
+    val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(repository) }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    var showNuevaTarea by remember { mutableStateOf(false) }
+    var detalleTareaSeleccionada by remember { mutableStateOf<Tarea?>(null) }
+    var procesarInboxSeleccionado by remember { mutableStateOf<InboxItem?>(null) }
+    val scope = rememberCoroutineScope()
+
+    when (val state = uiState) {
+        is DayteskUiState.Loading -> {
+            // Brief loading
+        }
+        is DayteskUiState.Success -> {
+            DayteskNavScaffold(
+                data = state.data,
+                tareaDao = tareaDao,
+                inboxItemDao = inboxItemDao,
+                onShowNuevaTarea = { showNuevaTarea = true },
+                onShowDetalleTarea = { tarea -> detalleTareaSeleccionada = tarea },
+                onShowProcesarInbox = { item -> procesarInboxSeleccionado = item },
+            )
+        }
+        is DayteskUiState.Error -> {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Error: ${state.throwable.message}",
+                    style = DayteskTypography.bodyMd,
+                    color = DayteskColors.Urgent,
+                )
+            }
+        }
+    }
+
+    // ── Modal: Nueva Tarea ─────────────────────────────────────
+    if (showNuevaTarea) {
+        NuevaTareaModal(
+            onDismiss = { showNuevaTarea = false },
+            onSave = { tarea ->
+                scope.launch {
+                    tareaDao.insertTarea(tarea.toEntity())
+                    showNuevaTarea = false
+                }
+            },
+        )
+    }
+
+    // ── Modal: Detalle Tarea ──────────────────────────────────
+    detalleTareaSeleccionada?.let { tarea ->
+        DetalleTareaModal(
+            tarea = tarea,
+            onDismiss = { detalleTareaSeleccionada = null },
+            onComplete = {
+                scope.launch {
+                    tareaDao.updateTarea(
+                        tarea.copy(estado = TareaEstado.COMPLETADA).toEntity(),
+                    )
+                    detalleTareaSeleccionada = null
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    tareaDao.deleteTarea(tarea.toEntity())
+                    detalleTareaSeleccionada = null
+                }
+            },
+        )
+    }
+
+    // ── Modal: Procesar Inbox ──────────────────────────────────
+    procesarInboxSeleccionado?.let { item ->
+        ProcesarInboxModal(
+            item = item,
+            onDismiss = { procesarInboxSeleccionado = null },
+            onSave = { contexto, prioridad ->
+                scope.launch {
+                    val nuevaTarea = Tarea(
+                        id = 0,
+                        titulo = item.texto,
+                        descripcion = "",
+                        contexto = contexto,
+                        prioridad = prioridad,
+                        estado = TareaEstado.PENDIENTE,
+                    )
+                    tareaDao.insertTarea(nuevaTarea.toEntity())
+                    inboxItemDao.deleteItem(item.toEntity())
+                    procesarInboxSeleccionado = null
+                }
+            },
+            onDelete = {
+                scope.launch {
+                    inboxItemDao.deleteItem(item.toEntity())
+                    procesarInboxSeleccionado = null
+                }
+            },
+        )
+    }
+}
+
+// ── Test entry point (read-only, no CRUD) ─────────────────────
+
+@Composable
+fun DayteskApp(
+    dataRepository: DataRepository,
 ) {
     val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(dataRepository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     when (val state = uiState) {
-        is DayteskUiState.Loading -> {
-            // Brief loading — no content
-        }
+        is DayteskUiState.Loading -> {}
         is DayteskUiState.Success -> {
-            DayteskNavScaffold(data = state.data)
+            DayteskNavScaffold(
+                data = state.data,
+                tareaDao = null,
+                inboxItemDao = null,
+                onShowNuevaTarea = {},
+                onShowDetalleTarea = {},
+                onShowProcesarInbox = {},
+            )
         }
         is DayteskUiState.Error -> {
             Box(
@@ -96,10 +228,20 @@ fun DayteskApp(
     }
 }
 
+// ── Navigation scaffold ───────────────────────────────────────
+
 @Composable
-private fun DayteskNavScaffold(data: DayteskData) {
+private fun DayteskNavScaffold(
+    data: DayteskData,
+    tareaDao: TareaDao?,
+    inboxItemDao: InboxItemDao?,
+    onShowNuevaTarea: () -> Unit,
+    onShowDetalleTarea: (Tarea) -> Unit,
+    onShowProcesarInbox: (InboxItem) -> Unit,
+) {
     val backStack = rememberNavBackStack(Inicio)
     val currentEntry = backStack.lastOrNull()
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         bottomBar = {
@@ -113,7 +255,7 @@ private fun DayteskNavScaffold(data: DayteskData) {
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { /* TODO: quick capture */ },
+                onClick = onShowNuevaTarea,
                 containerColor = DayteskColors.Primary,
                 contentColor = Color.White,
                 shape = CircleShape,
@@ -137,23 +279,50 @@ private fun DayteskNavScaffold(data: DayteskData) {
                 entry<Inicio> {
                     InicioScreen(
                         data = data,
-                        onTaskClick = { /* TODO: navigate to detail */ },
-                        onTaskToggle = { _, _ -> /* TODO: implement */ },
-                        onSeeAll = { /* TODO: navigate to tareas tab */ },
+                        onTaskClick = { taskId ->
+                            findTaskById(data, taskId)?.let { onShowDetalleTarea(it) }
+                        },
+                        onTaskToggle = { taskId, completed ->
+                            if (tareaDao != null) {
+                                scope.launch {
+                                    val task = findTaskById(data, taskId) ?: return@launch
+                                    val newEstado = if (completed) TareaEstado.COMPLETADA else TareaEstado.PENDIENTE
+                                    tareaDao.updateTarea(task.copy(estado = newEstado).toEntity())
+                                }
+                            }
+                        },
+                        onSeeAll = {
+                            backStack.clear()
+                            backStack.add(Tareas)
+                        },
                     )
                 }
                 entry<Inbox> {
                     InboxScreen(
                         data = data,
-                        onItemClick = { /* TODO: open process modal */ },
-                        onProcessAll = { /* TODO: process all */ },
+                        onItemClick = { itemId ->
+                            data.inbox.find { it.id == itemId }?.let { onShowProcesarInbox(it) }
+                        },
+                        onProcessAll = {
+                            data.inbox.firstOrNull()?.let { onShowProcesarInbox(it) }
+                        },
                     )
                 }
                 entry<Tareas> {
                     TareasScreen(
                         data = data,
-                        onTaskClick = { /* TODO: navigate to detail */ },
-                        onTaskToggle = { _, _ -> /* TODO: implement */ },
+                        onTaskClick = { taskId ->
+                            findTaskById(data, taskId)?.let { onShowDetalleTarea(it) }
+                        },
+                        onTaskToggle = { taskId, completed ->
+                            if (tareaDao != null) {
+                                scope.launch {
+                                    val task = findTaskById(data, taskId) ?: return@launch
+                                    val newEstado = if (completed) TareaEstado.COMPLETADA else TareaEstado.PENDIENTE
+                                    tareaDao.updateTarea(task.copy(estado = newEstado).toEntity())
+                                }
+                            }
+                        },
                     )
                 }
                 entry<Utilidades> { UtilidadesScreen(data) }
@@ -162,6 +331,13 @@ private fun DayteskNavScaffold(data: DayteskData) {
         )
     }
 }
+
+// ── Helpers ────────────────────────────────────────────────────
+
+private fun findTaskById(data: DayteskData, id: Long): Tarea? =
+    data.tareasHoy.find { it.id == id }
+        ?: data.tareasSemana.find { it.id == id }
+        ?: data.completadas.find { it.id == id }
 
 @Composable
 private fun DayteskBottomBar(

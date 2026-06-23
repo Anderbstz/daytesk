@@ -51,9 +51,8 @@ import java.util.Locale
 fun DetalleTareaModal(
     tarea: Tarea,
     onDismiss: () -> Unit,
-    onCompletar: (Long) -> Unit,
-    onEliminar: (Long) -> Unit,
-    onEditar: (Long) -> Unit,
+    onComplete: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -98,14 +97,8 @@ fun DetalleTareaModal(
                         .padding(start = DayteskSpacing.sm),
                     textAlign = TextAlign.Center,
                 )
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Editar",
-                    tint = DayteskColors.TextDisabled,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable { onEditar(tarea.id) },
-                )
+                // Edit — not wired yet
+                Spacer(modifier = Modifier.size(20.dp))
             }
 
             Column(
@@ -266,7 +259,7 @@ fun DetalleTareaModal(
                             .height(48.dp)
                             .clip(DayteskShapes.pill)
                             .background(DayteskColors.Success)
-                            .clickable { onCompletar(tarea.id) },
+                            .clickable { onComplete() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -286,7 +279,7 @@ fun DetalleTareaModal(
                             .clip(DayteskShapes.pill)
                             .background(DayteskColors.Surface)
                             .border(1.5.dp, DayteskColors.Urgent, DayteskShapes.pill)
-                            .clickable { onEliminar(tarea.id) },
+                            .clickable { onDelete() },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(

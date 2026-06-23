@@ -42,10 +42,10 @@ import com.nuitcode.daytesk.theme.DayteskTypography
 
 @Composable
 fun ProcesarInboxModal(
-    inboxItem: InboxItem,
+    item: InboxItem,
     onDismiss: () -> Unit,
-    onGuardar: (InboxItem, Contexto, Prioridad) -> Unit,
-    onEliminar: (InboxItem) -> Unit,
+    onSave: (Contexto, Prioridad) -> Unit,
+    onDelete: () -> Unit,
 ) {
     var selectedContexto by remember { mutableStateOf(Contexto.PERSONAL) }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
@@ -98,7 +98,7 @@ fun ProcesarInboxModal(
 
             // Inbox item text
             Text(
-                text = inboxItem.texto,
+                text = item.texto,
                 style = DayteskTypography.bodyMd,
                 color = DayteskColors.TextSecondary,
                 modifier = Modifier.padding(bottom = DayteskSpacing.lg),
@@ -221,7 +221,7 @@ fun ProcesarInboxModal(
                     style = DayteskTypography.bodySm,
                     color = DayteskColors.Urgent,
                     modifier = Modifier
-                        .clickable { onEliminar(inboxItem) }
+                        .clickable { onDelete() }
                         .padding(vertical = 12.dp),
                 )
 
@@ -229,7 +229,7 @@ fun ProcesarInboxModal(
                     modifier = Modifier
                         .clip(DayteskShapes.pill)
                         .background(DayteskColors.Primary)
-                        .clickable { onGuardar(inboxItem, selectedContexto, selectedPrioridad) }
+                        .clickable { onSave(selectedContexto, selectedPrioridad) }
                         .padding(horizontal = 32.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {

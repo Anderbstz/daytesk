@@ -9,10 +9,11 @@ import com.nuitcode.daytesk.theme.DayteskTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val app = application as DayteskApplication
         enableEdgeToEdge()
         setContent {
             DayteskTheme {
-                DayteskApp()
+                DayteskApp(database = app.database)
             }
         }
     }

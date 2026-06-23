@@ -43,6 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Prioridad
+import com.nuitcode.daytesk.model.Tarea
+import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
@@ -51,7 +53,7 @@ import com.nuitcode.daytesk.theme.DayteskTypography
 @Composable
 fun NuevaTareaModal(
     onDismiss: () -> Unit,
-    onGuardar: (titulo: String, descripcion: String, contexto: Contexto, prioridad: Prioridad, reminderOn: Boolean) -> Unit,
+    onSave: (Tarea) -> Unit,
 ) {
     var titulo by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
@@ -109,7 +111,16 @@ fun NuevaTareaModal(
                     color = DayteskColors.Primary,
                     modifier = Modifier.clickable {
                         if (titulo.isNotBlank()) {
-                            onGuardar(titulo, descripcion, selectedContexto, selectedPrioridad, reminderOn)
+                            onSave(
+                                Tarea(
+                                    id = 0,
+                                    titulo = titulo,
+                                    descripcion = descripcion,
+                                    contexto = selectedContexto,
+                                    prioridad = selectedPrioridad,
+                                    estado = TareaEstado.PENDIENTE,
+                                ),
+                            )
                         }
                     },
                 )
@@ -302,7 +313,16 @@ fun NuevaTareaModal(
                     text = "Crear tarea",
                     onClick = {
                         if (titulo.isNotBlank()) {
-                            onGuardar(titulo, descripcion, selectedContexto, selectedPrioridad, reminderOn)
+                            onSave(
+                                Tarea(
+                                    id = 0,
+                                    titulo = titulo,
+                                    descripcion = descripcion,
+                                    contexto = selectedContexto,
+                                    prioridad = selectedPrioridad,
+                                    estado = TareaEstado.PENDIENTE,
+                                ),
+                            )
                         }
                     },
                     enabled = titulo.isNotBlank(),

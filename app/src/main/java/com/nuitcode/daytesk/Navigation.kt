@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -176,6 +177,7 @@ fun DayteskApp(
                         contexto = contexto,
                         prioridad = prioridad,
                         estado = TareaEstado.PENDIENTE,
+                        fechaVencimiento = System.currentTimeMillis(),
                     )
                     tareaDao.insertTarea(nuevaTarea.toEntity())
                     inboxItemDao.deleteItem(item.toEntity())
@@ -244,6 +246,7 @@ private fun DayteskNavScaffold(
     val scope = rememberCoroutineScope()
 
     Scaffold(
+        modifier = Modifier.safeDrawingPadding(),
         bottomBar = {
             DayteskBottomBar(
                 currentEntry = currentEntry,

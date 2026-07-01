@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -61,25 +62,12 @@ fun NuevaTareaModal(
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
     var reminderOn by remember { mutableStateOf(false) }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DayteskColors.Background)
+            .safeDrawingPadding()
     ) {
-        // Dark overlay
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable { onDismiss() },
-        )
-
-        // Modal content
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(DayteskColors.Background, DayteskShapes.large)
-                .clickable(enabled = false) { } // consume clicks on content
-        ) {
             // ── Top bar ─────────────────────────────────────
             Row(
                 modifier = Modifier
@@ -119,6 +107,7 @@ fun NuevaTareaModal(
                                     contexto = selectedContexto,
                                     prioridad = selectedPrioridad,
                                     estado = TareaEstado.PENDIENTE,
+                                    fechaVencimiento = System.currentTimeMillis(),
                                 ),
                             )
                         }
@@ -321,13 +310,13 @@ fun NuevaTareaModal(
                                     contexto = selectedContexto,
                                     prioridad = selectedPrioridad,
                                     estado = TareaEstado.PENDIENTE,
+                                    fechaVencimiento = System.currentTimeMillis(),
                                 ),
                             )
                         }
                     },
                     enabled = titulo.isNotBlank(),
                 )
-            }
         }
     }
 }

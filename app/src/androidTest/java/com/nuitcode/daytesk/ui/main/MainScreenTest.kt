@@ -3,6 +3,7 @@ package com.nuitcode.daytesk.ui.main
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
 import com.nuitcode.daytesk.DayteskApp
 import com.nuitcode.daytesk.data.DataRepository
 import com.nuitcode.daytesk.data.DayteskData
@@ -48,6 +49,17 @@ class MainScreenTest {
     @Test
     fun inicialScreen_showsInicioContent() {
         composeTestRule.onNodeWithText("Inicio").assertExists()
+    }
+
+    // ── inicio-polish REQ-01: bottom nav clears the gesture bar ──────────
+
+    @Test
+    fun bottomNav_allFiveTabsAreDisplayed() {
+        composeTestRule.onNodeWithText("Inicio").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Inbox").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Tareas").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Utilidades").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Perfil").assertIsDisplayed()
     }
 }
 

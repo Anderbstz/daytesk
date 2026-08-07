@@ -7,11 +7,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -246,7 +247,7 @@ private fun DayteskNavScaffold(
     val scope = rememberCoroutineScope()
 
     Scaffold(
-        modifier = Modifier.safeDrawingPadding(),
+        modifier = Modifier,
         bottomBar = {
             DayteskBottomBar(
                 currentEntry = currentEntry,
@@ -353,6 +354,7 @@ private fun DayteskBottomBar(
             .height(72.dp),
         color = Color.White,
         shadowElevation = 8.dp,
+        windowInsets = WindowInsets.navigationBars,
     ) {
         Row(
             modifier = Modifier

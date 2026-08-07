@@ -10,4 +10,9 @@ data class Tarea(
     val fechaCreacion: Long = System.currentTimeMillis(),
     val fechaVencimiento: Long? = null,
     val orden: Int = 0,
-)
+) {
+    companion object {
+        const val TITULO_MAX_LENGTH = 150
+        const val DESCRIPCION_MAX_LENGTH = 500
+    }
+}

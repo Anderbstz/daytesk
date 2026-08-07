@@ -61,6 +61,10 @@ fun NuevaTareaModal(
     var selectedContexto by remember { mutableStateOf(Contexto.PERSONAL) }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
     var reminderOn by remember { mutableStateOf(false) }
+    var fechaVencimiento by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
 
     Column(
         modifier = Modifier
@@ -129,6 +133,16 @@ fun NuevaTareaModal(
                     onValueChange = { titulo = it },
                     placeholder = "Título de la tarea",
                     singleLine = true,
+                    maxLength = Tarea.TITULO_MAX_LENGTH,
+                    supportingText = {
+                        Text(
+                            text = "${titulo.length}/${Tarea.TITULO_MAX_LENGTH}",
+                            style = DayteskTypography.tiny,
+                            color = DayteskColors.TextDisabled,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
                 )
 
                 // Description textarea
@@ -138,6 +152,16 @@ fun NuevaTareaModal(
                     placeholder = "Descripción (opcional)",
                     singleLine = false,
                     minHeight = 80,
+                    maxLength = Tarea.DESCRIPCION_MAX_LENGTH,
+                    supportingText = {
+                        Text(
+                            text = "${descripcion.length}/${Tarea.DESCRIPCION_MAX_LENGTH}",
+                            style = DayteskTypography.tiny,
+                            color = DayteskColors.TextDisabled,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
                 )
 
                 // Divider
@@ -330,40 +354,50 @@ private fun TextFieldThemed(
     placeholder: String,
     singleLine: Boolean = true,
     minHeight: Int = 0,
+    maxLength: Int? = null,
+    supportingText: (@Composable () -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (minHeight > 0) Modifier.height(minHeight.dp) else Modifier)
-            .clip(shape)
-            .background(DayteskColors.Surface)
-            .border(1.dp, DayteskColors.Border, shape)
-            .padding(horizontal = 14.dp, vertical = if (singleLine) 14.dp else 10.dp),
-    ) {
-        androidx.compose.material3.OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    style = DayteskTypography.bodyMd,
-                    color = DayteskColors.TextDisabled,
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = singleLine,
-            textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
-            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                cursorColor = DayteskColors.Primary,
-            ),
-            shape = shape,
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (minHeight > 0) Modifier.height(minHeight.dp) else Modifier)
+                .clip(shape)
+                .background(DayteskColors.Surface)
+                .border(1.dp, DayteskColors.Border, shape)
+                .padding(horizontal = 14.dp, vertical = if (singleLine) 14.dp else 10.dp),
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                value = value,
+                onValueChange = { newValue ->
+                    val clamped = if (maxLength != null) newValue.take(maxLength) else newValue
+                    onValueChange(clamped)
+                },
+                placeholder = {
+                    Text(
+                        text = placeholder,
+                        style = DayteskTypography.bodyMd,
+                        color = DayteskColors.TextDisabled,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = singleLine,
+                textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    cursorColor = DayteskColors.Primary,
+                ),
+                shape = shape,
+            )
+        }
+        if (supportingText != null) {
+            supportingText()
+        }
     }
 }
 

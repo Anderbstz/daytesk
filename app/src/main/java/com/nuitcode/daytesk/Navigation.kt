@@ -91,7 +91,8 @@ fun DayteskApp(
 ) {
     val tareaDao = database.tareaDao()
     val inboxItemDao = database.inboxItemDao()
-    val repository = remember { DefaultDataRepository(tareaDao, inboxItemDao) }
+    val contextoDao = database.contextoDao()
+    val repository = remember { DefaultDataRepository(tareaDao, inboxItemDao, contextoDao) }
     val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(repository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

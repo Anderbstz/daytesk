@@ -24,10 +24,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +54,9 @@ import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun NuevaTareaModal(
@@ -222,8 +229,9 @@ fun NuevaTareaModal(
                         )
                     },
                     label = "Fecha",
-                    value = "Sin fecha",
+                    value = formatTimestamp(fechaVencimiento),
                     showChevron = true,
+                    onClick = { showDatePicker = true },
                 )
 
                 // Priority row
@@ -343,6 +351,30 @@ fun NuevaTareaModal(
                 )
         }
     }
+
+    // ── Date picker dialog ─────────────────────────────
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDateMillis = datePickerState.selectedDateMillis
+                    showDatePicker = false
+                    showTimePicker = true
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancelar")
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 }
 
 // ── Shared composables ────────────────────────────────────────
@@ -407,9 +439,13 @@ private fun FormRow(
     label: String,
     value: String,
     showChevron: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
+    val rowModifier = Modifier.fillMaxWidth().let { base ->
+        if (onClick != null) base.clickable { onClick() } else base
+    }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon()
@@ -460,4 +496,12 @@ private fun PillButton(
             ),
         )
     }
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+
+private fun formatTimestamp(millis: Long?): String {
+    if (millis == null) return "Sin fecha"
+    val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+    return sdf.format(Date(millis))
 }

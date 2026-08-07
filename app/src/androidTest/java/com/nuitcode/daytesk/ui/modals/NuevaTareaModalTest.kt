@@ -1,7 +1,9 @@
 package com.nuitcode.daytesk.ui.modals
 
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import com.nuitcode.daytesk.theme.DayteskTheme
 import org.junit.Rule
@@ -48,5 +50,22 @@ class NuevaTareaModalTest {
         setModal()
         composeTestRule.onNodeWithText("Descripción (opcional)").performTextInput("y".repeat(600))
         composeTestRule.onNodeWithText("500/500").assertExists()
+    }
+
+    // ── Phase 2: REQ-01 — DatePicker open + cancel wiring ──────────────
+
+    @Test
+    fun datePicker_opensOnFechaRowClick() {
+        setModal()
+        composeTestRule.onNodeWithText("Sin fecha").performClick()
+        composeTestRule.onNodeWithText("OK").assertIsDisplayed()
+    }
+
+    @Test
+    fun datePicker_cancelDoesNotMutateFecha() {
+        setModal()
+        composeTestRule.onNodeWithText("Sin fecha").performClick()
+        composeTestRule.onNodeWithText("Cancelar").performClick()
+        composeTestRule.onNodeWithText("Sin fecha").assertIsDisplayed()
     }
 }

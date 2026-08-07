@@ -29,6 +29,14 @@ data class Contexto(
     @Composable
     fun label(): String = "@$nombre"
 
+    /**
+     * A `Contexto` is considered a "default" (one of the 4 seeds) when its
+     * `id` matches one of [DEFAULTS]. Defaults are immutable in the UI — name
+     * editing is allowed (REQ-04), but color/icon are not, and deletion is
+     * blocked at DAO + Repository + UI layers (REQ-05).
+     */
+    fun isDefault(): Boolean = DEFAULTS.any { it.id == id }
+
     companion object {
         /**
          * The four seed contexts. Their ids (1..4) are referenced by the v1->v2

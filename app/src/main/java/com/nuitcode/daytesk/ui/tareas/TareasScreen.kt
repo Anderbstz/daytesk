@@ -77,14 +77,14 @@ fun TareasScreen(
     onTaskClick: (Long) -> Unit = {},
     onTaskToggle: (Long, Boolean) -> Unit = { _, _ -> },
 ) {
-    var selectedFilter by remember { mutableStateOf<Contexto?>(null) }
+    var selectedFilter by remember { mutableStateOf<Long?>(null) }
     var checkedTasks by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     val hoyFiltered = data.tareasHoy.filter {
-        selectedFilter == null || it.contexto == selectedFilter
+        selectedFilter == null || it.contextoId == selectedFilter
     }
     val semanaFiltered = data.tareasSemana.filter {
-        selectedFilter == null || it.contexto == selectedFilter
+        selectedFilter == null || it.contextoId == selectedFilter
     }
     val hasResults = hoyFiltered.isNotEmpty() || semanaFiltered.isNotEmpty()
 
@@ -99,6 +99,7 @@ fun TareasScreen(
         FilterChipsRow(
             selectedFilter = selectedFilter,
             onFilterSelected = { selectedFilter = it },
+            contextos = data.contextos,
         )
 
         if (!hasResults) {
@@ -205,8 +206,9 @@ private fun TareasTopBar() {
 
 @Composable
 private fun FilterChipsRow(
-    selectedFilter: Contexto?,
-    onFilterSelected: (Contexto?) -> Unit,
+    selectedFilter: Long?,
+    onFilterSelected: (Long?) -> Unit,
+    contextos: List<Contexto>,
 ) {
     Row(
         modifier = Modifier
@@ -220,11 +222,11 @@ private fun FilterChipsRow(
             isSelected = selectedFilter == null,
             onClick = { onFilterSelected(null) },
         )
-        Contexto.entries.forEach { contexto ->
+        contextos.forEach { contexto ->
             FilterChipPill(
                 label = contexto.label(),
-                isSelected = selectedFilter == contexto,
-                onClick = { onFilterSelected(contexto) },
+                isSelected = selectedFilter == contexto.id,
+                onClick = { onFilterSelected(contexto.id) },
             )
         }
     }

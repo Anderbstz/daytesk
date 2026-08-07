@@ -55,12 +55,16 @@ import com.nuitcode.daytesk.theme.DayteskTypography
 fun NuevaTareaModal(
     onDismiss: () -> Unit,
     onSave: (Tarea) -> Unit,
+    contextos: List<Contexto> = Contexto.DEFAULTS,
 ) {
     var titulo by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
-    var selectedContexto by remember { mutableStateOf(Contexto.PERSONAL) }
+    var selectedContextoId by remember { mutableStateOf(3L) }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
     var reminderOn by remember { mutableStateOf(false) }
+
+    val selectedContexto = contextos.firstOrNull { it.id == selectedContextoId }
+        ?: Contexto.DEFAULTS.first { it.id == 3L }
 
     Column(
         modifier = Modifier
@@ -104,6 +108,7 @@ fun NuevaTareaModal(
                                     id = 0,
                                     titulo = titulo,
                                     descripcion = descripcion,
+                                    contextoId = selectedContextoId,
                                     contexto = selectedContexto,
                                     prioridad = selectedPrioridad,
                                     estado = TareaEstado.PENDIENTE,
@@ -159,8 +164,8 @@ fun NuevaTareaModal(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.sm),
                     ) {
-                        Contexto.entries.forEach { ctx ->
-                            val isSelected = ctx == selectedContexto
+                        contextos.forEach { ctx ->
+                            val isSelected = ctx.id == selectedContextoId
                             Box(
                                 modifier = Modifier
                                     .height(32.dp)
@@ -173,7 +178,7 @@ fun NuevaTareaModal(
                                         if (!isSelected) Modifier.border(1.dp, DayteskColors.Border, RoundedCornerShape(50))
                                         else Modifier
                                     )
-                                    .clickable { selectedContexto = ctx }
+                                    .clickable { selectedContextoId = ctx.id }
                                     .padding(horizontal = 14.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -307,6 +312,7 @@ fun NuevaTareaModal(
                                     id = 0,
                                     titulo = titulo,
                                     descripcion = descripcion,
+                                    contextoId = selectedContextoId,
                                     contexto = selectedContexto,
                                     prioridad = selectedPrioridad,
                                     estado = TareaEstado.PENDIENTE,

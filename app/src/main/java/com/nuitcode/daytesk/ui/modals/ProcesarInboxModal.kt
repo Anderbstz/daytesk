@@ -46,8 +46,9 @@ fun ProcesarInboxModal(
     onDismiss: () -> Unit,
     onSave: (Contexto, Prioridad) -> Unit,
     onDelete: () -> Unit,
+    contextos: List<Contexto> = Contexto.DEFAULTS,
 ) {
-    var selectedContexto by remember { mutableStateOf(Contexto.PERSONAL) }
+    var selectedContexto by remember { mutableStateOf(Contexto.DEFAULTS[2]) }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
 
     Box(
@@ -113,7 +114,7 @@ fun ProcesarInboxModal(
                     modifier = Modifier.padding(bottom = DayteskSpacing.sm),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.sm)) {
-                    Contexto.entries.forEach { ctx ->
+                    contextos.forEach { ctx ->
                         val isSelected = ctx == selectedContexto
                         Box(
                             modifier = Modifier

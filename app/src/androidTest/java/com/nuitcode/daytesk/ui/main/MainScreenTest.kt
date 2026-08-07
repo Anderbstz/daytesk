@@ -95,6 +95,18 @@ class MainScreenTest {
                 }
             }
     }
+
+    // ── inicio-polish REQ-03: header Row spans full width, avatar trailing ──
+
+    @Test
+    fun inicioTopBar_avatarBubbleIsDisplayed() {
+        composeTestRule.onNodeWithText("AN").assertIsDisplayed()
+    }
+
+    @Test
+    fun inicioTopBar_displayNameIsDisplayed() {
+        composeTestRule.onNodeWithText("Andrés").assertIsDisplayed()
+    }
 }
 
 private class FakeInstantRepository : DataRepository {

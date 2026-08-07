@@ -5,9 +5,11 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.theme.DayteskTheme
 import org.junit.Rule
 import org.junit.Test
+import java.util.Calendar
 
 class NuevaTareaModalTest {
 
@@ -67,5 +69,49 @@ class NuevaTareaModalTest {
         composeTestRule.onNodeWithText("Sin fecha").performClick()
         composeTestRule.onNodeWithText("Cancelar").performClick()
         composeTestRule.onNodeWithText("Sin fecha").assertIsDisplayed()
+    }
+
+    // ── Phase 3: REQ-01 / REQ-02 — TimePicker confirm writes chosen ts ──
+
+    @Test
+    fun datePicker_confirmSetsFechaVencimiento() {
+        val captured = mutableListOf<Tarea>()
+        composeTestRule.setContent {
+            DayteskTheme {
+                NuevaTareaModal(onDismiss = {}, onSave = { captured.add(it) })
+            }
+        }
+        composeTestRule.onNodeWithText("Título de la tarea").performTextInput("Mi tarea")
+        composeTestRule.onNodeWithText("Sin fecha").performClick()
+        composeTestRule.onNodeWithText("OK").performClick() // confirm DatePicker
+        composeTestRule.onNodeWithText("OK").performClick() // confirm TimePicker (defaults 12:00)
+        composeTestRule.onNodeWithText("Crear tarea").performClick()
+        assert(captured.size == 1) {
+            "Expected 1 captured tarea, got ${captured.size}"
+        }
+        val t = captured[0]
+        assert(t.titulo == "Mi tarea") {
+            "Expected titulo 'Mi tarea', got '${t.titulo}'"
+        }
+        assert(t.fechaVencimiento != null) {
+            "Expected non-null fechaVencimiento after confirming date+time"
+        }
+        // The TimePicker state defaults to 12:00; Calendar.set must produce
+        // 12:00:00.000 in the default time zone — proves the binding logic.
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = t.fechaVencimiento!!
+        }
+        assert(cal.get(Calendar.HOUR_OF_DAY) == 12) {
+            "Expected HOUR_OF_DAY=12, got ${cal.get(Calendar.HOUR_OF_DAY)}"
+        }
+        assert(cal.get(Calendar.MINUTE) == 0) {
+            "Expected MINUTE=0, got ${cal.get(Calendar.MINUTE)}"
+        }
+        assert(cal.get(Calendar.SECOND) == 0) {
+            "Expected SECOND=0, got ${cal.get(Calendar.SECOND)}"
+        }
+        assert(cal.get(Calendar.MILLISECOND) == 0) {
+            "Expected MILLISECOND=0, got ${cal.get(Calendar.MILLISECOND)}"
+        }
     }
 }

@@ -27,11 +27,14 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,6 +49,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Prioridad
 import com.nuitcode.daytesk.model.Tarea
@@ -55,6 +59,7 @@ import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -373,6 +378,51 @@ fun NuevaTareaModal(
             },
         ) {
             DatePicker(state = datePickerState)
+        }
+    }
+
+    // ── Time picker dialog (M3 has no TimePickerDialog; wrap manually) ─
+    if (showTimePicker && pendingDateMillis != null) {
+        val timeState = rememberTimePickerState(initialHour = 12, initialMinute = 0)
+        Dialog(
+            onDismissRequest = {
+                showTimePicker = false
+                pendingDateMillis = null
+            },
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = DayteskColors.Surface,
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    TimePicker(state = timeState)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = {
+                            showTimePicker = false
+                            pendingDateMillis = null
+                        }) {
+                            Text("Cancelar")
+                        }
+                        TextButton(onClick = {
+                            val cal = Calendar.getInstance().apply {
+                                timeInMillis = pendingDateMillis!!
+                                set(Calendar.HOUR_OF_DAY, timeState.hour)
+                                set(Calendar.MINUTE, timeState.minute)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            fechaVencimiento = cal.timeInMillis
+                            showTimePicker = false
+                            pendingDateMillis = null
+                        }) {
+                            Text("OK")
+                        }
+                    }
+                }
+            }
         }
     }
 }

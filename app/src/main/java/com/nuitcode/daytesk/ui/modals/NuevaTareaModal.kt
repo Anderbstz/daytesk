@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -78,11 +77,20 @@ fun NuevaTareaModal(
     var showTimePicker by remember { mutableStateOf(false) }
     var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
 
+    fun buildTarea(): Tarea = Tarea(
+        id = 0,
+        titulo = titulo,
+        descripcion = descripcion,
+        contexto = selectedContexto,
+        prioridad = selectedPrioridad,
+        estado = TareaEstado.PENDIENTE,
+        fechaVencimiento = fechaVencimiento,
+    )
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DayteskColors.Background)
-            .safeDrawingPadding()
     ) {
             // ── Top bar ─────────────────────────────────────
             Row(
@@ -113,21 +121,11 @@ fun NuevaTareaModal(
                     text = "Guardar",
                     style = DayteskTypography.label,
                     color = DayteskColors.Primary,
-                    modifier = Modifier.clickable {
-                        if (titulo.isNotBlank()) {
-                            onSave(
-                                Tarea(
-                                    id = 0,
-                                    titulo = titulo,
-                                    descripcion = descripcion,
-                                    contexto = selectedContexto,
-                                    prioridad = selectedPrioridad,
-                                    estado = TareaEstado.PENDIENTE,
-                                    fechaVencimiento = System.currentTimeMillis(),
-                                ),
-                            )
-                        }
-                    },
+modifier = Modifier.clickable {
+                    if (titulo.isNotBlank()) {
+                        onSave(buildTarea())
+                    }
+                },
                 )
             }
 
@@ -339,17 +337,7 @@ fun NuevaTareaModal(
                     text = "Crear tarea",
                     onClick = {
                         if (titulo.isNotBlank()) {
-                            onSave(
-                                Tarea(
-                                    id = 0,
-                                    titulo = titulo,
-                                    descripcion = descripcion,
-                                    contexto = selectedContexto,
-                                    prioridad = selectedPrioridad,
-                                    estado = TareaEstado.PENDIENTE,
-                                    fechaVencimiento = System.currentTimeMillis(),
-                                ),
-                            )
+                            onSave(buildTarea())
                         }
                     },
                     enabled = titulo.isNotBlank(),

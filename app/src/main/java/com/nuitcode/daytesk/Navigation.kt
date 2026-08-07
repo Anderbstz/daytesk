@@ -203,6 +203,8 @@ fun DayteskApp(
     val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(dataRepository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
+    var showNuevaTarea by remember { mutableStateOf(false) }
+
     when (val state = uiState) {
         is DayteskUiState.Loading -> {}
         is DayteskUiState.Success -> {
@@ -210,7 +212,7 @@ fun DayteskApp(
                 data = state.data,
                 tareaDao = null,
                 inboxItemDao = null,
-                onShowNuevaTarea = {},
+                onShowNuevaTarea = { showNuevaTarea = true },
                 onShowDetalleTarea = {},
                 onShowProcesarInbox = {},
             )
@@ -227,6 +229,13 @@ fun DayteskApp(
                 )
             }
         }
+    }
+
+    if (showNuevaTarea) {
+        NuevaTareaModal(
+            onDismiss = { showNuevaTarea = false },
+            onSave = {},
+        )
     }
 }
 

@@ -3,7 +3,9 @@ package com.nuitcode.daytesk.ui.inicio
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.data.DayteskStats
 import com.nuitcode.daytesk.theme.DayteskColors
@@ -66,11 +70,12 @@ fun QuickStatsRow(stats: DayteskStats) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .padding(horizontal = 20.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         statItems.forEach { stat ->
-            StatCard(stat = stat, modifier = Modifier.weight(1f))
+            StatCard(stat = stat, modifier = Modifier.fillMaxHeight().weight(1f))
         }
     }
 }
@@ -79,10 +84,10 @@ fun QuickStatsRow(stats: DayteskStats) {
 private fun StatCard(stat: StatConfig, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
-            .height(80.dp)
+            .testTag("StatCard")
             .background(stat.bgColor, RoundedCornerShape(16.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.Center,
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Icon(
             imageVector = stat.icon,
@@ -104,6 +109,8 @@ private fun StatCard(stat: StatConfig, modifier: Modifier = Modifier) {
             text = stat.subtitle,
             style = DayteskTypography.caption,
             color = DayteskColors.TextSecondary,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }

@@ -2,8 +2,12 @@ package com.nuitcode.daytesk.ui.main
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getBoundsInRoot
 import com.nuitcode.daytesk.DayteskApp
 import com.nuitcode.daytesk.data.DataRepository
 import com.nuitcode.daytesk.data.DayteskData
@@ -60,6 +64,36 @@ class MainScreenTest {
         composeTestRule.onNodeWithText("Tareas").assertIsDisplayed()
         composeTestRule.onNodeWithText("Utilidades").assertIsDisplayed()
         composeTestRule.onNodeWithText("Perfil").assertIsDisplayed()
+    }
+
+    // ── inicio-polish REQ-02: quick-stat cards equal height, no clip ─────
+
+    @Test
+    fun quickStatsRow_allThreeCardsRender() {
+        composeTestRule.onNodeWithText("Hoy").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Inbox").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Hechas").assertIsDisplayed()
+    }
+
+    @Test
+    fun quickStatsRow_statNumbersDoNotClip() {
+        // Fake repo emits DayteskStats(tareasHoy = 3) - count text renders as "3".
+        composeTestRule.onNodeWithText("3").assertIsDisplayed()
+    }
+
+    @Test
+    fun quickStatsRow_cardsHaveEqualHeight() {
+        // Three StatCard nodes should share a measured height via IntrinsicSize.Min.
+        composeTestRule.onAllNodes(hasTestTag("StatCard"))
+            .assertCountEquals(3)
+            .apply {
+                val heights = fetchSemanticsNodes().map { it.getBoundsInRoot().height }
+                val max = heights.max()
+                val min = heights.min()
+                check(max - min <= 1) {
+                    "StatCard heights differ by ${max - min}px (min=$min, max=$max)"
+                }
+            }
     }
 }
 

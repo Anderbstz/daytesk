@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -62,6 +63,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NuevaTareaModal(
     onDismiss: () -> Unit,
@@ -78,6 +80,9 @@ fun NuevaTareaModal(
     var showTimePicker by remember { mutableStateOf(false) }
     var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
 
+    val selectedContexto = contextos.firstOrNull { it.id == selectedContextoId }
+        ?: Contexto.DEFAULTS.first { it.id == 3L }
+
     fun buildTarea(): Tarea = Tarea(
         id = 0,
         titulo = titulo,
@@ -88,9 +93,6 @@ fun NuevaTareaModal(
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = fechaVencimiento,
     )
-
-    val selectedContexto = contextos.firstOrNull { it.id == selectedContextoId }
-        ?: Contexto.DEFAULTS.first { it.id == 3L }
 
     Column(
         modifier = Modifier

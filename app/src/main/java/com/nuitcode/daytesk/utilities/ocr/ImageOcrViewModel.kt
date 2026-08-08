@@ -10,7 +10,6 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.work.getWorkInfoByIdFlow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
@@ -63,8 +62,6 @@ class ImageOcrViewModel(
         recognitionJob?.cancel()
         recognitionJob = null
         state.value = ImageOcrState.Idle
-    }
-
     }
 }
 

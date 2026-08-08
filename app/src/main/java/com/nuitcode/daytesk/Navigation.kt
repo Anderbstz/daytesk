@@ -449,7 +449,6 @@ private fun DayteskBottomBar(
             .height(72.dp),
         color = Color.White,
         shadowElevation = 8.dp,
-        windowInsets = WindowInsets.navigationBars,
     ) {
         Row(
             modifier = Modifier

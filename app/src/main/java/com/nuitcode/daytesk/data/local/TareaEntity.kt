@@ -7,37 +7,61 @@ import com.nuitcode.daytesk.model.Prioridad
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 
+/**
+ * Room entity for `tareas` table.
+ *
+ * v1 stored `contexto: String` (the enum name). v2 stores `contextoId: Long`
+ * (FK into `contextos`). See [Migrations.MIGRATION_1_2] for the upgrade path.
+ *
+ * `contextoId` defaults to `3L` (PERSONAL) so newly inserted tareas without
+ * an explicit context pick up the same default the enum used to provide.
+ *
+ * The `contexto: Contexto` field on the domain [Tarea] is no longer filled by
+ * [toDomain] — resolution happens in
+ * [com.nuitcode.daytesk.data.DefaultDataRepository.data] via the 3-way
+ * `combine` over tareas + inbox + contextos.
+ */
 @Entity(tableName = "tareas")
 data class TareaEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val titulo: String,
     val descripcion: String = "",
     val prioridad: String = "MEDIA",
-    val contexto: String = "PERSONAL",
+    val contextoId: Long = 3L,
     val estado: String = "PENDIENTE",
     val fechaCreacion: Long = System.currentTimeMillis(),
     val fechaVencimiento: Long? = null,
     val orden: Int = 0,
 )
 
+/**
+ * Entity -> domain. The `contexto` field on [Tarea] gets a default of
+ * `Contexto.DEFAULTS[2]` (PERSONAL) and is overwritten by
+ * [com.nuitcode.daytesk.data.DefaultDataRepository] when the FK resolves
+ * against the current `contextos` flow.
+ */
 fun TareaEntity.toDomain(): Tarea = Tarea(
     id = id,
     titulo = titulo,
     descripcion = descripcion,
     prioridad = Prioridad.valueOf(prioridad),
-    contexto = Contexto.valueOf(contexto),
+    contextoId = contextoId,
+    contexto = Contexto.DEFAULTS[2],
     estado = TareaEstado.valueOf(estado),
     fechaCreacion = fechaCreacion,
     fechaVencimiento = fechaVencimiento,
     orden = orden,
 )
 
+/**
+ * Domain -> entity. Maps the FK directly; the enum-string column is gone.
+ */
 fun Tarea.toEntity(): TareaEntity = TareaEntity(
     id = id,
     titulo = titulo,
     descripcion = descripcion,
     prioridad = prioridad.name,
-    contexto = contexto.name,
+    contextoId = contextoId,
     estado = estado.name,
     fechaCreacion = fechaCreacion,
     fechaVencimiento = fechaVencimiento,

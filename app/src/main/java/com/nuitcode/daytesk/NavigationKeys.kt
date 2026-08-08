@@ -8,3 +8,4 @@ import kotlinx.serialization.Serializable
 @Serializable data object Tareas : NavKey
 @Serializable data object Utilidades : NavKey
 @Serializable data object Perfil : NavKey
+@Serializable data object Contextos : NavKey

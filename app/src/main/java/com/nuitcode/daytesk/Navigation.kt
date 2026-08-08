@@ -45,8 +45,10 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
+import com.nuitcode.daytesk.data.ContextoRepository
 import com.nuitcode.daytesk.data.DataRepository
 import com.nuitcode.daytesk.data.DayteskData
+import com.nuitcode.daytesk.data.DefaultContextoRepository
 import com.nuitcode.daytesk.data.DefaultDataRepository
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.InboxItemDao
@@ -58,6 +60,7 @@ import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
+import com.nuitcode.daytesk.ui.contextos.ContextosScreen
 import com.nuitcode.daytesk.ui.inbox.InboxScreen
 import com.nuitcode.daytesk.ui.inicio.InicioScreen
 import com.nuitcode.daytesk.ui.main.DayteskUiState
@@ -89,10 +92,13 @@ private val tabs = listOf(
 @Composable
 fun DayteskApp(
     database: AppDatabase,
+    contextoRepository: ContextoRepository =
+        DefaultContextoRepository(database.contextoDao()),
 ) {
     val tareaDao = database.tareaDao()
     val inboxItemDao = database.inboxItemDao()
-    val repository = remember { DefaultDataRepository(tareaDao, inboxItemDao) }
+    val contextoDao = database.contextoDao()
+    val repository = remember { DefaultDataRepository(tareaDao, inboxItemDao, contextoDao) }
     val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(repository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -101,13 +107,18 @@ fun DayteskApp(
     var procesarInboxSeleccionado by remember { mutableStateOf<InboxItem?>(null) }
     val scope = rememberCoroutineScope()
 
+    // Hoisted so modals outside the Success branch can still read `data.contextos`.
+    var cachedData by remember { mutableStateOf<DayteskData?>(null) }
+
     when (val state = uiState) {
         is DayteskUiState.Loading -> {
             // Brief loading
         }
         is DayteskUiState.Success -> {
+            cachedData = state.data
             DayteskNavScaffold(
                 data = state.data,
+                contextoRepository = contextoRepository,
                 tareaDao = tareaDao,
                 inboxItemDao = inboxItemDao,
                 onShowNuevaTarea = { showNuevaTarea = true },
@@ -130,16 +141,19 @@ fun DayteskApp(
     }
 
     // ── Modal: Nueva Tarea ─────────────────────────────────────
-    if (showNuevaTarea) {
-        NuevaTareaModal(
-            onDismiss = { showNuevaTarea = false },
-            onSave = { tarea ->
-                scope.launch {
-                    tareaDao.insertTarea(tarea.toEntity())
-                    showNuevaTarea = false
-                }
-            },
-        )
+    cachedData?.let { currentData ->
+        if (showNuevaTarea) {
+            NuevaTareaModal(
+                contextos = currentData.contextos,
+                onDismiss = { showNuevaTarea = false },
+                onSave = { tarea ->
+                    scope.launch {
+                        tareaDao.insertTarea(tarea.toEntity())
+                        showNuevaTarea = false
+                    }
+                },
+            )
+        }
     }
 
     // ── Modal: Detalle Tarea ──────────────────────────────────
@@ -165,33 +179,37 @@ fun DayteskApp(
     }
 
     // ── Modal: Procesar Inbox ──────────────────────────────────
-    procesarInboxSeleccionado?.let { item ->
-        ProcesarInboxModal(
-            item = item,
-            onDismiss = { procesarInboxSeleccionado = null },
-            onSave = { contexto, prioridad ->
-                scope.launch {
-                    val nuevaTarea = Tarea(
-                        id = 0,
-                        titulo = item.texto,
-                        descripcion = "",
-                        contexto = contexto,
-                        prioridad = prioridad,
-                        estado = TareaEstado.PENDIENTE,
-                        fechaVencimiento = System.currentTimeMillis(),
-                    )
-                    tareaDao.insertTarea(nuevaTarea.toEntity())
-                    inboxItemDao.deleteItem(item.toEntity())
-                    procesarInboxSeleccionado = null
-                }
-            },
-            onDelete = {
-                scope.launch {
-                    inboxItemDao.deleteItem(item.toEntity())
-                    procesarInboxSeleccionado = null
-                }
-            },
-        )
+    cachedData?.let { currentData ->
+        procesarInboxSeleccionado?.let { item ->
+            ProcesarInboxModal(
+                item = item,
+                contextos = currentData.contextos,
+                onDismiss = { procesarInboxSeleccionado = null },
+                onSave = { contexto, prioridad ->
+                    scope.launch {
+                        val nuevaTarea = Tarea(
+                            id = 0,
+                            titulo = item.texto,
+                            descripcion = "",
+                            contextoId = contexto.id,
+                            contexto = contexto,
+                            prioridad = prioridad,
+                            estado = TareaEstado.PENDIENTE,
+                            fechaVencimiento = System.currentTimeMillis(),
+                        )
+                        tareaDao.insertTarea(nuevaTarea.toEntity())
+                        inboxItemDao.deleteItem(item.toEntity())
+                        procesarInboxSeleccionado = null
+                    }
+                },
+                onDelete = {
+                    scope.launch {
+                        inboxItemDao.deleteItem(item.toEntity())
+                        procesarInboxSeleccionado = null
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -200,17 +218,21 @@ fun DayteskApp(
 @Composable
 fun DayteskApp(
     dataRepository: DataRepository,
+    contextoRepository: ContextoRepository? = null,
 ) {
     val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(dataRepository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showNuevaTarea by remember { mutableStateOf(false) }
+    var cachedData by remember { mutableStateOf<DayteskData?>(null) }
 
     when (val state = uiState) {
         is DayteskUiState.Loading -> {}
         is DayteskUiState.Success -> {
+            cachedData = state.data
             DayteskNavScaffold(
                 data = state.data,
+                contextoRepository = contextoRepository,
                 tareaDao = null,
                 inboxItemDao = null,
                 onShowNuevaTarea = { showNuevaTarea = true },
@@ -232,11 +254,14 @@ fun DayteskApp(
         }
     }
 
-    if (showNuevaTarea) {
-        NuevaTareaModal(
-            onDismiss = { showNuevaTarea = false },
-            onSave = {},
-        )
+    cachedData?.let { currentData ->
+        if (showNuevaTarea) {
+            NuevaTareaModal(
+                contextos = currentData.contextos,
+                onDismiss = { showNuevaTarea = false },
+                onSave = { showNuevaTarea = false },
+            )
+        }
     }
 }
 
@@ -245,6 +270,7 @@ fun DayteskApp(
 @Composable
 private fun DayteskNavScaffold(
     data: DayteskData,
+    contextoRepository: ContextoRepository?,
     tareaDao: TareaDao?,
     inboxItemDao: InboxItemDao?,
     onShowNuevaTarea: () -> Unit,
@@ -339,7 +365,36 @@ private fun DayteskNavScaffold(
                     )
                 }
                 entry<Utilidades> { UtilidadesScreen(data) }
-                entry<Perfil> { PerfilScreen(data) }
+                entry<Perfil> {
+                    PerfilScreen(
+                        data = data,
+                        onNavigateContextos = {
+                            if (contextoRepository != null) {
+                                backStack.add(Contextos)
+                            }
+                        },
+                    )
+                }
+                entry<Contextos> {
+                    if (contextoRepository != null) {
+                        ContextosScreen(
+                            contextoRepository = contextoRepository,
+                            onBack = { backStack.removeLastOrNull() },
+                        )
+                    } else {
+                        // Defensive: production entry always supplies a repo.
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Contextos no disponibles",
+                                style = DayteskTypography.bodyMd,
+                                color = DayteskColors.Urgent,
+                            )
+                        }
+                    }
+                }
             },
         )
     }

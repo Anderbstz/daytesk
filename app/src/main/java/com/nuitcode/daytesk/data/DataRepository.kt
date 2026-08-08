@@ -1,8 +1,11 @@
 package com.nuitcode.daytesk.data
 
+import com.nuitcode.daytesk.data.local.ContextoDao
 import com.nuitcode.daytesk.data.local.InboxItemDao
+import com.nuitcode.daytesk.data.local.InboxItemEntity
 import com.nuitcode.daytesk.data.local.TareaDao
 import com.nuitcode.daytesk.data.local.toDomain
+import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 import kotlinx.coroutines.flow.Flow
@@ -17,13 +20,22 @@ interface DataRepository {
 class DefaultDataRepository(
     private val tareaDao: TareaDao,
     private val inboxItemDao: InboxItemDao,
+    private val contextoDao: ContextoDao,
 ) : DataRepository {
     override val data: Flow<DayteskData> = combine(
         tareaDao.getAllTareas(),
         inboxItemDao.getAllItems(),
-    ) { tareaEntities, inboxEntities ->
-        val tareas = tareaEntities.map { it.toDomain() }
-        val inboxItems = inboxEntities.map { it.toDomain() }
+        contextoDao.getAllFlow(),
+    ) { tareaEntities, inboxEntities, contextoEntities ->
+        val contextos = contextoEntities.map { it.toDomain() }
+        val contextosById = contextos.associateBy { it.id }
+        val fallback = Contexto.DEFAULTS.first { it.id == 3L }
+
+        val tareas = tareaEntities.map { entity ->
+            val tarea = entity.toDomain()
+            val resolved = contextosById[entity.contextoId] ?: fallback
+            tarea.copy(contexto = resolved)
+        }
 
         val completadas = tareas.filter { it.estado == TareaEstado.COMPLETADA }
         val hoy = tareas.filter { it.estado != TareaEstado.COMPLETADA && esHoy(it) }
@@ -34,15 +46,16 @@ class DefaultDataRepository(
         DayteskData(
             stats = DayteskStats(
                 tareasHoy = hoy.size,
-                inboxPendientes = inboxItems.size,
+                inboxPendientes = inboxItems(inboxEntities).size,
                 tareasCompletadas = completadas.size,
                 totalCompletadasHistorico = completadas.size,
             ),
             tareasHoy = hoy,
             tareasSemana = semana,
             completadas = completadas,
-            inbox = inboxItems,
+            inbox = inboxItems(inboxEntities),
             alertas = emptyList(),
+            contextos = contextos,
             weeklyReview = emptyList(),
         )
     }.catch { _ ->
@@ -54,9 +67,13 @@ class DefaultDataRepository(
                 completadas = emptyList(),
                 inbox = emptyList(),
                 alertas = emptyList(),
+                contextos = Contexto.DEFAULTS,
             ),
         )
     }
+
+    private fun inboxItems(entities: List<InboxItemEntity>) =
+        entities.map { it.toDomain() }
 
     private fun esHoy(tarea: Tarea): Boolean {
         val venc = tarea.fechaVencimiento ?: return false

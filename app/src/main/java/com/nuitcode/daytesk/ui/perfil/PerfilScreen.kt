@@ -41,7 +41,10 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun PerfilScreen(data: DayteskData) {
+fun PerfilScreen(
+    data: DayteskData,
+    onNavigateContextos: () -> Unit = {},
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -59,7 +62,7 @@ fun PerfilScreen(data: DayteskData) {
         Spacer(modifier = Modifier.height(DayteskSpacing.xxxl))
 
         // ── 3. Settings List ───────────────────────────────────
-        SettingsList()
+        SettingsList(onNavigateContextos = onNavigateContextos)
     }
 }
 
@@ -190,11 +193,17 @@ private fun StatCard(
 // ═══════════════════════════════════════════════════════════════
 
 @Composable
-private fun SettingsList() {
+private fun SettingsList(onNavigateContextos: () -> Unit = {}) {
     Column(modifier = Modifier.fillMaxWidth()) {
         SettingsRow(
             icon = { GearIcon() },
             text = "Configuración",
+        )
+        SettingsDivider()
+        SettingsRow(
+            icon = { FolderIcon() },
+            text = "Contextos",
+            onClick = onNavigateContextos,
         )
         SettingsDivider()
         SettingsRow(
@@ -226,16 +235,23 @@ private fun SettingsRow(
     icon: @Composable () -> Unit,
     text: String,
     textColor: Color = DayteskColors.TextPrimary,
+    onClick: (() -> Unit)? = null,
 ) {
+    val baseModifier = Modifier
+        .fillMaxWidth()
+        .padding(
+            start = 20.dp,
+            end = 20.dp,
+            top = 14.dp,
+            bottom = 14.dp,
+        )
+    val modifier = if (onClick != null) {
+        baseModifier.clickable { onClick() }
+    } else {
+        baseModifier
+    }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                start = 20.dp,
-                end = 20.dp,
-                top = 14.dp,
-                bottom = 14.dp,
-            ),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.size(22.dp)) {
@@ -355,5 +371,54 @@ private fun LogoutIcon() {
             close()
         }
         drawPath(path, color)
+    }
+}
+
+@Composable
+private fun FolderIcon() {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val strokeW = size.minDimension * 0.08f
+        val color = DayteskColors.TextDisabled
+        val w = size.width
+        val h = size.height
+        val inset = size.minDimension * 0.12f
+
+        // Folder body — rounded rectangle covering most of the canvas.
+        val bodyTop = inset + size.minDimension * 0.15f
+        val bodyLeft = inset
+        val bodyRight = w - inset
+        val bodyBottom = h - inset
+
+        val body = Path().apply {
+            addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    left = bodyLeft,
+                    top = bodyTop,
+                    right = bodyRight,
+                    bottom = bodyBottom,
+                    radiusX = strokeW,
+                    radiusY = strokeW,
+                ),
+            )
+        }
+        drawPath(body, color, style = Stroke(strokeW))
+
+        // Folder tab — small rectangle at top-left.
+        val tabWidth = w * 0.45f
+        val tabTop = inset
+        val tabHeight = bodyTop - inset
+        val tab = Path().apply {
+            addRoundRect(
+                androidx.compose.ui.geometry.RoundRect(
+                    left = bodyLeft,
+                    top = tabTop,
+                    right = bodyLeft + tabWidth,
+                    bottom = tabTop + tabHeight,
+                    radiusX = strokeW * 0.6f,
+                    radiusY = strokeW * 0.6f,
+                ),
+            )
+        }
+        drawPath(tab, color, style = Stroke(strokeW))
     }
 }

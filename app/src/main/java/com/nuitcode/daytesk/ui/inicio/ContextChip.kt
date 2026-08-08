@@ -9,20 +9,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.model.Contexto
-import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskTypography
 
+/**
+ * Renders a `@nombre` chip with the context's background color and a
+ * luminance-derived text color (black on light, white on dark). Works for
+ * any `Contexto` — defaults and custom alike — because the text-color rule
+ * reads from the context's own `color` rather than a hardcoded palette
+ * mapping (REQ design-system).
+ */
 @Composable
 fun ContextChip(contexto: Contexto) {
     val backgroundColor = contexto.color().copy(alpha = 0.2f)
-    val textColor = when (contexto) {
-        Contexto.CASA -> DayteskColors.ContextCasaText
-        Contexto.TRABAJO -> DayteskColors.ContextTrabajoText
-        Contexto.PERSONAL -> DayteskColors.ContextPersonalText
-        Contexto.SALUD -> DayteskColors.ContextSaludText
-    }
+    val textColor = if (contexto.color().luminance() > 0.5f) Color.Black else Color.White
 
     Box(
         modifier = Modifier

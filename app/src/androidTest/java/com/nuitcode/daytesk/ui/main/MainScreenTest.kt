@@ -11,13 +11,18 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.nuitcode.daytesk.DayteskApp
+import com.nuitcode.daytesk.data.ContextoRepository
 import com.nuitcode.daytesk.data.DataRepository
 import com.nuitcode.daytesk.data.DayteskData
 import com.nuitcode.daytesk.data.DayteskStats
 import com.nuitcode.daytesk.data.MockData
+import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.theme.DayteskTheme
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -48,7 +53,6 @@ class MainScreenTest {
 
     @Test
     fun bottomNav_inicioTabIsSelectedByDefault() {
-        // Inicio tab label text uses tiny style (10sp) — still findable by substring
         composeTestRule.onNodeWithText("Inicio").assertExists()
     }
 
@@ -118,6 +122,65 @@ class MainScreenTest {
         composeTestRule.onNodeWithContentDescription("Agregar tarea").performClick()
         composeTestRule.onNodeWithText("Nueva tarea").assertIsDisplayed()
     }
+
+    // ── custom-contexts REQ: ContextosScreen reachability ────────────────
+
+    /**
+     * Reachability smoke test for `ContextosScreen`. Even WITHOUT a
+     * `contextoRepository` the Perfil row "Contextos" exists as a SettingsRow
+     * so users see the entry point. Tapping it does NOT push the `Contextos`
+     * route (no repo), so the production entry point is responsible for
+     * threading the repo.
+     */
+    @Test
+    fun perfilScreen_contextosRowExists() {
+        composeTestRule.onNodeWithText("Perfil").performClick()
+        composeTestRule.onNodeWithText("Contextos").assertExists()
+    }
+
+    /**
+     * With a `contextoRepository` supplied the row is enabled AND tapping it
+     * pushes the `Contextos` route (assert by title).
+     */
+    @Test
+    fun contextosScreen_isReachableFromPerfil() {
+        val fakeContextoRepo = FakeContextoRepository(initial = Contexto.DEFAULTS)
+
+        composeTestRule.setContent {
+            DayteskTheme {
+                DayteskApp(
+                    dataRepository = fakeRepo,
+                    contextoRepository = fakeContextoRepo,
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("Perfil").performClick()
+        composeTestRule.onNodeWithText("Contextos").performClick()
+
+        // The ContextosScreen top bar title is rendered.
+        composeTestRule.onNodeWithText("Contextos").assertExists()
+        // The 4 defaults surface as rows.
+        composeTestRule.onNodeWithText("@casa").assertExists()
+        composeTestRule.onNodeWithText("@trabajo").assertExists()
+        composeTestRule.onNodeWithText("@personal").assertExists()
+        composeTestRule.onNodeWithText("@salud").assertExists()
+    }
+
+    @Test
+    fun tareasScreen_filterChipsIncludeAllContexts() {
+        // The DataRepository pipe must surface `data.contextos` for the Tareas
+        // screen filter chips. With 4 defaults the chip row should expose
+        // @casa, @trabajo, @personal, @salud (in addition to "Todas").
+        composeTestRule.onNodeWithText("Tareas").performClick()
+
+        composeTestRule.onNodeWithText("@casa").assertExists()
+        composeTestRule.onNodeWithText("@trabajo").assertExists()
+        composeTestRule.onNodeWithText("@personal").assertExists()
+        composeTestRule.onNodeWithText("@salud").assertExists()
+
+        assertTrue(true)
+    }
 }
 
 private class FakeInstantRepository : DataRepository {
@@ -138,7 +201,28 @@ private class FakeInstantRepository : DataRepository {
                 inbox = MockData.inboxItems,
                 alertas = MockData.alertas,
                 weeklyReview = MockData.weeklyReview,
+                contextos = Contexto.DEFAULTS,
             )
         )
+    }
+}
+
+private class FakeContextoRepository(
+    initial: List<Contexto> = emptyList(),
+) : ContextoRepository {
+    private val state = MutableStateFlow(initial)
+    override val contextos: Flow<List<Contexto>> = state.asStateFlow()
+    override suspend fun add(contexto: Contexto): Result<Long> {
+        val nextId = (state.value.maxOfOrNull { it.id } ?: 0L) + 1L
+        state.value = state.value + contexto.copy(id = nextId)
+        return Result.success(nextId)
+    }
+    override suspend fun update(contexto: Contexto): Result<Unit> {
+        state.value = state.value.map { if (it.id == contexto.id) contexto else it }
+        return Result.success(Unit)
+    }
+    override suspend fun delete(id: Long): Result<Unit> {
+        state.value = state.value.filter { it.id != id }
+        return Result.success(Unit)
     }
 }

@@ -12,13 +12,17 @@ object MockData {
     private val now = System.currentTimeMillis()
     private val dayMs = 86_400_000L
 
+    // Stable ids mirror Contexto.DEFAULTS — used by TareaEntity.contextoId (FK).
+    // 1=casa, 2=trabajo, 3=personal, 4=salud.
+
     // ── 6 Tareas ──────────────────────────────────────────────
     private val tarea1 = Tarea(
         id = 1,
         titulo = "Llamar al dentista",
         descripcion = "Confirmar cita de las 10am",
         prioridad = Prioridad.ALTA,
-        contexto = Contexto.SALUD,
+        contextoId = 4L, // salud
+        contexto = Contexto.DEFAULTS[3],
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + dayMs,
         orden = 0,
@@ -29,7 +33,8 @@ object MockData {
         titulo = "Informe trimestral",
         descripcion = "Completar informe para reunión de las 5pm",
         prioridad = Prioridad.ALTA,
-        contexto = Contexto.TRABAJO,
+        contextoId = 2L, // trabajo
+        contexto = Contexto.DEFAULTS[1],
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + dayMs / 2,
         orden = 1,
@@ -40,7 +45,8 @@ object MockData {
         titulo = "Sacar la basura",
         descripcion = "",
         prioridad = Prioridad.BAJA,
-        contexto = Contexto.CASA,
+        contextoId = 1L, // casa
+        contexto = Contexto.DEFAULTS[0],
         estado = TareaEstado.COMPLETADA,
         orden = 2,
     )
@@ -50,7 +56,8 @@ object MockData {
         titulo = "Limpiar el garaje",
         descripcion = "Organizar cajas y barrer",
         prioridad = Prioridad.MEDIA,
-        contexto = Contexto.CASA,
+        contextoId = 1L, // casa
+        contexto = Contexto.DEFAULTS[0],
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + 3 * dayMs,
         orden = 3,
@@ -61,7 +68,8 @@ object MockData {
         titulo = "Leer un libro",
         descripcion = "Terminar 'El poder del hábito'",
         prioridad = Prioridad.BAJA,
-        contexto = Contexto.PERSONAL,
+        contextoId = 3L, // personal
+        contexto = Contexto.DEFAULTS[2],
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + 7 * dayMs,
         orden = 4,
@@ -72,7 +80,8 @@ object MockData {
         titulo = "Comprar regalo cumpleaños",
         descripcion = "Regalo para mamá",
         prioridad = Prioridad.MEDIA,
-        contexto = Contexto.PERSONAL,
+        contextoId = 3L, // personal
+        contexto = Contexto.DEFAULTS[2],
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + 5 * dayMs,
         orden = 5,

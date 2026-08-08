@@ -47,6 +47,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nuitcode.daytesk.ImageOcr
+import com.nuitcode.daytesk.AudioTranscribe
+import com.nuitcode.daytesk.VideoTranscribe
+import androidx.navigation3.runtime.NavKey
 import com.nuitcode.daytesk.data.DayteskData
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskElevation
@@ -54,40 +58,55 @@ import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
 
-// ── Data model ───────────────────────────────────────────────────
+private enum class ToolKind {
+    IMAGE,
+    AUDIO,
+    VIDEO,
+}
 
 private data class ToolItem(
     val title: String,
     val description: String,
     val containerColor: Color,
     val iconColor: Color,
+    val kind: ToolKind,
+    val route: NavKey,
 )
 
 private val tools = listOf(
     ToolItem(
         title = "Convertir imágenes",
-        description = "PNG ↔ ICO, quitar fondo",
+        description = "Extraer texto de una imagen",
         containerColor = DayteskColors.PrimaryLight,
         iconColor = DayteskColors.Primary,
+        kind = ToolKind.IMAGE,
+        route = ImageOcr,
     ),
     ToolItem(
         title = "Transcribir audio",
         description = "Audio a texto",
         containerColor = Color(0xFFF3EEFF),
         iconColor = Color(0xFFD4B8FD),
+        kind = ToolKind.AUDIO,
+        route = AudioTranscribe,
     ),
     ToolItem(
         title = "Video a texto/audio",
         description = "Extraer texto o audio",
         containerColor = DayteskColors.UrgentLight,
         iconColor = DayteskColors.Urgent,
+        kind = ToolKind.VIDEO,
+        route = VideoTranscribe,
     ),
 )
 
 // ── Main screen ──────────────────────────────────────────────────
 
 @Composable
-fun UtilidadesScreen(data: DayteskData) {
+fun UtilidadesScreen(
+    data: DayteskData,
+    onNavigate: (NavKey) -> Unit = {},
+) {
     Column(modifier = Modifier.fillMaxSize()) {
         // TopBar
         Row(
@@ -115,7 +134,7 @@ fun UtilidadesScreen(data: DayteskData) {
             items(tools) { tool ->
                 ToolCard(
                     tool = tool,
-                    onClick = { /* TODO: navigate to tool screen */ },
+                    onClick = { onNavigate(tool.route) },
                 )
             }
             item {
@@ -244,11 +263,10 @@ private fun ToolIcon(
     tool: ToolItem,
     modifier: Modifier,
 ) {
-    when (tool) {
-        tools[0] -> ImageIcon(modifier = modifier, color = tool.iconColor)
-        tools[1] -> MicIcon(modifier = modifier, color = tool.iconColor)
-        tools[2] -> PlayIcon(modifier = modifier, color = tool.iconColor)
-        else -> ImageIcon(modifier = modifier, color = tool.iconColor)
+    when (tool.kind) {
+        ToolKind.IMAGE -> ImageIcon(modifier = modifier, color = tool.iconColor)
+        ToolKind.AUDIO -> MicIcon(modifier = modifier, color = tool.iconColor)
+        ToolKind.VIDEO -> PlayIcon(modifier = modifier, color = tool.iconColor)
     }
 }
 

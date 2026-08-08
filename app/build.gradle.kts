@@ -87,6 +87,14 @@ dependencies {
   // WorkManager
   implementation(libs.androidx.work.runtime.ktx)
 
+  // ML Kit OCR: com.google.mlkit:text-recognition
+  implementation(libs.mlkit.text.recognition)
+  implementation(libs.kotlinx.coroutines.play.services)
+
+  // JVM Android test support
+  testImplementation(libs.androidx.test.core)
+  testImplementation(libs.robolectric)
+
   // Room
   implementation(libs.androidx.room.runtime)
   implementation(libs.androidx.room.ktx)

@@ -67,6 +67,7 @@ import com.nuitcode.daytesk.ui.modals.ProcesarInboxModal
 import com.nuitcode.daytesk.ui.perfil.PerfilScreen
 import com.nuitcode.daytesk.ui.tareas.TareasScreen
 import com.nuitcode.daytesk.ui.utilidades.UtilidadesScreen
+import com.nuitcode.daytesk.utilities.ocr.ImageOcrScreen
 import kotlinx.coroutines.launch
 
 private data class TabItem(
@@ -328,7 +329,21 @@ private fun DayteskNavScaffold(
                         },
                     )
                 }
-                entry<Utilidades> { UtilidadesScreen(data) }
+                entry<Utilidades> {
+                    UtilidadesScreen(
+                        data = data,
+                        onNavigate = { route -> backStack.add(route) },
+                    )
+                }
+                entry<ImageOcr> {
+                    ImageOcrScreen(onBack = { backStack.removeLastOrNull() })
+                }
+                entry<AudioTranscribe> {
+                    DeferredUtilityScreen(title = "Transcribir audio")
+                }
+                entry<VideoTranscribe> {
+                    DeferredUtilityScreen(title = "Video a texto/audio")
+                }
                 entry<Perfil> { PerfilScreen(data) }
             },
         )
@@ -336,6 +351,20 @@ private fun DayteskNavScaffold(
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+
+@Composable
+private fun DeferredUtilityScreen(title: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "$title estará disponible en la próxima entrega.",
+            style = DayteskTypography.bodyMd,
+            color = DayteskColors.TextSecondary,
+        )
+    }
+}
 
 private fun findTaskById(data: DayteskData, id: Long): Tarea? =
     data.tareasHoy.find { it.id == id }

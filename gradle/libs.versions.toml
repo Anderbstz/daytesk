@@ -15,6 +15,9 @@ nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
 room = "2.7.1"
 work = "2.9.1"
+mlkitTextRecognition = "16.0.1"
+coroutinesPlayServices = "1.10.2"
+robolectric = "4.13"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -42,6 +45,13 @@ androidx-lifecycle-viewmodel-navigation3 = { module = "androidx.lifecycle:lifecy
 
 # WorkManager
 androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
+
+# ML Kit OCR
+mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
+
+# JVM Android test support
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 # Room
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

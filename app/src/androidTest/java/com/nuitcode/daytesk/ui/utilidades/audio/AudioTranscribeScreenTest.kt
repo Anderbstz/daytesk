@@ -24,7 +24,7 @@ class AudioTranscribeScreenTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun idleState_showsFilePickerDisclosureAndMicButton() {
+    fun idleState_showsDisclosureAndMicButton() {
         val viewModel = AudioTranscribeViewModel(
             FakeAudioTranscribeScheduler(
                 preflight = AudioTranscribePreflight.Ready,
@@ -38,11 +38,10 @@ class AudioTranscribeScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Seleccionar audio").assertExists()
         composeTestRule.onNodeWithText("Grabar audio").assertExists()
         composeTestRule.onNodeWithText(
-            "La transcripción usa el reconocimiento de voz en tu dispositivo. " +
-                "Requiere conexión para descargar el modelo la primera vez y para mejores resultados. " +
+            "La transcripción usa el reconocimiento de voz integrado en Android. " +
+                "Requiere conexión a Internet para funcionar en la mayoría de los dispositivos. " +
                 "Tu audio NO se envía a la nube.",
         ).assertExists()
     }

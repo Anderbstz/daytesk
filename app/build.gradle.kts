@@ -90,8 +90,9 @@ dependencies {
 
   // ML Kit OCR: com.google.mlkit:text-recognition
   implementation(libs.mlkit.text.recognition)
-  // ML Kit Speech Recognition (PR2): com.google.mlkit:speech-recognition
-  implementation(libs.mlkit.speech.recognition)
+  // ML Kit Speech Recognition (PR2) REMOVED: com.google.mlkit:speech-recognition does not exist
+  // in Google's Maven repo. Audio/video transcription now uses the built-in
+  // android.speech.SpeechRecognizer (live mic only).
   implementation(libs.kotlinx.coroutines.play.services)
 
   // JVM Android test support

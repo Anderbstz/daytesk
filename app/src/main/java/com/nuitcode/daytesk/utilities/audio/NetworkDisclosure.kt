@@ -17,16 +17,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 internal const val NETWORK_DISCLOSURE_TEXT =
-    "La transcripción usa el reconocimiento de voz en tu dispositivo. " +
-        "Requiere conexión para descargar el modelo la primera vez y para mejores resultados. " +
+    "La transcripción usa el reconocimiento de voz integrado en Android. " +
+        "Requiere conexión a Internet para funcionar en la mayoría de los dispositivos. " +
         "Tu audio NO se envía a la nube."
 
 internal fun networkDisclosureContainsRequiredPhrase(text: String): Boolean =
     text.contains("Requiere conexión") && text.contains("Tu audio NO se envía a la nube")
 
 /**
- * REQ-06: A persistent banner that discloses the network requirement of ML Kit Speech
- * Recognition. Sits above the start button on audio and video tool screens.
+ * REQ-06: A persistent banner that discloses the network requirement of the built-in
+ * speech recognition service. Sits above the start button on audio and video tool
+ * screens.
  */
 @Composable
 fun NetworkDisclosure(modifier: Modifier = Modifier) {

@@ -1,8 +1,6 @@
 package com.nuitcode.daytesk.utilities.video
 
 import android.content.Intent
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,8 +12,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -28,8 +26,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.nuitcode.daytesk.utilities.audio.NetworkDisclosure
-import com.nuitcode.daytesk.utilities.common.PermissionGate
-import com.nuitcode.daytesk.utilities.common.PermissionRationale
 import com.nuitcode.daytesk.utilities.common.ResultCard
 import com.nuitcode.daytesk.utilities.common.TranscriptionProgress
 
@@ -53,12 +49,6 @@ fun VideoTranscribeScreen(
     val clipboard = LocalClipboardManager.current
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    val videoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri: android.net.Uri? ->
-        uri?.let(viewModel::enqueue)
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,26 +69,20 @@ fun VideoTranscribeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             NetworkDisclosure()
-            Text("Elegí un archivo de video para extraer su audio y transcribirlo.")
+            Text("La transcripción de archivos de video llegará en una próxima versión.")
 
-            PermissionGate(
-                permissions = listOf("android.permission.READ_MEDIA_VIDEO"),
-                rationale = PermissionRationale(
-                    title = "Acceso a tus videos",
-                    message = "Necesitamos acceso al video que elijas para extraerle el audio y transcribirlo.",
-                ),
-            ) { requestPermission ->
-                OutlinedButton(
-                    onClick = {
-                        requestPermission { videoPicker.launch("video/*") }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state !is VideoTranscribeState.Extracting &&
-                        state !is VideoTranscribeState.Transcribing &&
-                        state !is VideoTranscribeState.Queued,
-                ) {
-                    Text("Seleccionar video")
-                }
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(
+                    text = "Próximamente: extracción de audio on-device y transcripción " +
+                        "con un modelo liviano (Whisper o Vosk). Por ahora, la herramienta " +
+                        "de audio graba directamente desde el micrófono.",
+                    modifier = Modifier.padding(16.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
 
             when (val currentState = state) {

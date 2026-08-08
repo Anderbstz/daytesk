@@ -11,7 +11,6 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.getWorkInfoByIdFlow
-import com.google.mlkit.speech.recognition.SpeechRecognizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.awaitClose
@@ -20,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 sealed interface AudioTranscribeState {
     data object Idle : AudioTranscribeState
@@ -77,6 +75,17 @@ class AudioTranscribeViewModel(
         }
     }
 
+    /**
+     * Emits a pre-transcribed text as a Success state. Used by the screen when
+     * the built-in [android.speech.SpeechRecognizer] finishes live mic
+     * recognition — the system API hands the text back directly, so we don't
+     * need to round-trip through the WorkManager-based file pipeline.
+     */
+    fun recognizeFromText(text: String) {
+        recognitionJob?.cancel()
+        state.value = AudioTranscribeState.Success(text)
+    }
+
     fun cancel() {
         recognitionJob?.cancel()
         recognitionJob = null
@@ -87,19 +96,16 @@ class AudioTranscribeViewModel(
 private class WorkManagerAudioTranscribeScheduler(
     private val workManager: WorkManager,
 ) : AudioTranscribeWorkScheduler {
+
     override suspend fun preflight(): AudioTranscribePreflight {
-        // ADR-7: pre-flight check converts ERROR_CANNOT_CHECK_MODEL or
-        // ERROR_MISSING_DATA into a clean state transition with actionable
-        // guidance. Constructing the recognizer is the cheapest probe — the
-        // Worker's doWork() performs the deeper check via startListening().
-        return try {
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(Locale("es", "AR"))
-            AudioTranscribePreflight.Ready
-        } catch (unavailable: Throwable) {
-            AudioTranscribePreflight.Unavailable(
-                "Reconocimiento de voz no disponible. Verificá que esté habilitado en Ajustes.",
-            )
-        }
+        // The pre-flight probe used to construct an ML Kit on-device recognizer
+        // and catch ERROR_CANNOT_CHECK_MODEL / ERROR_MISSING_DATA. With the
+        // switch to the built-in android.speech.SpeechRecognizer the
+        // availability check happens at the screen level where the recognizer
+        // is constructed. The screen surfaces a clear "Reconocimiento de voz no
+        // disponible" message via RecognitionListener#onError if the device has
+        // no speech service installed.
+        return AudioTranscribePreflight.Ready
     }
 
     override fun enqueue(uri: Uri): Flow<AudioTranscribeWorkResult> = callbackFlow {

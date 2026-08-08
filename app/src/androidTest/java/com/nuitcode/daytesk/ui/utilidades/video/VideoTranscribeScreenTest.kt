@@ -36,7 +36,7 @@ class VideoTranscribeScreenTest {
     val composeTestRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
-    fun idleState_showsFilePickerAndNetworkDisclosure() {
+    fun idleState_showsComingSoonAndNetworkDisclosure() {
         val viewModel = VideoTranscribeViewModel(
             scheduler = FakeVideoTranscribeScheduler(MutableSharedFlow()),
         )
@@ -47,10 +47,14 @@ class VideoTranscribeScreenTest {
             }
         }
 
-        composeTestRule.onNodeWithText("Seleccionar video").assertExists()
         composeTestRule.onNodeWithText(
-            "La transcripción usa el reconocimiento de voz en tu dispositivo. " +
-                "Requiere conexión para descargar el modelo la primera vez y para mejores resultados. " +
+            "Próximamente: extracción de audio on-device y transcripción " +
+                "con un modelo liviano (Whisper o Vosk). Por ahora, la herramienta " +
+                "de audio graba directamente desde el micrófono.",
+        ).assertExists()
+        composeTestRule.onNodeWithText(
+            "La transcripción usa el reconocimiento de voz integrado en Android. " +
+                "Requiere conexión a Internet para funcionar en la mayoría de los dispositivos. " +
                 "Tu audio NO se envía a la nube.",
         ).assertExists()
     }

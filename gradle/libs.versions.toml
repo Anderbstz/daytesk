@@ -17,9 +17,9 @@ room = "2.7.1"
 robolectric = "4.13"
 work = "2.9.1"
 mlkitTextRecognition = "16.0.1"
-mlkitSpeechRecognition = "0.11.0"
+# mlkitSpeechRecognition removed: com.google.mlkit:speech-recognition does not exist in Google's Maven repo.
+# Audio/video transcription now uses the built-in android.speech.SpeechRecognizer (live mic only).
 coroutinesPlayServices = "1.10.2"
-robolectric = "4.13"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -51,12 +51,9 @@ androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version
 
 # ML Kit OCR
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
-# ML Kit Speech Recognition (PR2)
-mlkit-speech-recognition = { module = "com.google.mlkit:speech-recognition", version.ref = "mlkitSpeechRecognition" }
+# ML Kit Speech Recognition removed: com.google.mlkit:speech-recognition is not in Google's Maven repo.
+# Audio/video transcription uses android.speech.SpeechRecognizer (no extra dependency).
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
-
-# JVM Android test support
-robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
 
 # Room
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

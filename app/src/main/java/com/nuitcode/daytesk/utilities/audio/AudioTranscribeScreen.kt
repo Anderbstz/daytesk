@@ -1,14 +1,11 @@
 package com.nuitcode.daytesk.utilities.audio
 
 import android.content.Intent
-import android.media.MediaRecorder
-import android.net.Uri
-import android.os.Build
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,7 +18,6 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -43,8 +39,7 @@ import com.nuitcode.daytesk.utilities.common.PermissionGate
 import com.nuitcode.daytesk.utilities.common.PermissionRationale
 import com.nuitcode.daytesk.utilities.common.ResultCard
 import com.nuitcode.daytesk.utilities.common.TranscriptionProgress
-import java.io.File
-import java.util.UUID
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,20 +60,12 @@ fun AudioTranscribeScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var isRecording by remember { mutableStateOf(false) }
-    var mediaRecorder by remember { mutableStateOf<MediaRecorder?>(null) }
-    var pendingRecordingUri by remember { mutableStateOf<Uri?>(null) }
-
-    val audioPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent(),
-    ) { uri: Uri? ->
-        uri?.let(viewModel::recognize)
-    }
+    var isListening by remember { mutableStateOf(false) }
+    var liveError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
-            mediaRecorder?.runCatching { release() }
-            mediaRecorder = null
+            isListening = false
         }
     }
 
@@ -102,73 +89,56 @@ fun AudioTranscribeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             NetworkDisclosure()
-            Text("Elegí un archivo de audio o grabá uno con el micrófono.")
+            Text("Tocá el micrófono y hablá. Solicitamos permiso de grabación la primera vez.")
 
             PermissionGate(
-                permissions = listOf(
-                    "android.permission.READ_MEDIA_AUDIO",
-                    "android.permission.RECORD_AUDIO",
-                ),
+                permissions = listOf("android.permission.RECORD_AUDIO"),
                 rationale = PermissionRationale(
-                    title = "Acceso a tu audio",
-                    message = "Necesitamos acceso al audio que elijas o que grabes para transcribirlo.",
+                    title = "Acceso al micrófono",
+                    message = "Necesitamos acceso al micrófono para transcribir tu voz en vivo.",
                 ),
             ) { requestPermission ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedButton(
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    FloatingActionButton(
                         onClick = {
-                            requestPermission { audioPicker.launch("audio/*") }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = state !is AudioTranscribeState.Loading && !isRecording,
-                    ) {
-                        Text("Seleccionar audio")
-                    }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        FloatingActionButton(
-                            onClick = {
-                                requestPermission {
-                                    if (!isRecording) {
-                                        startRecording(
-                                            context = context,
-                                            onStart = { recorder, uri ->
-                                                mediaRecorder = recorder
-                                                pendingRecordingUri = uri
-                                                isRecording = true
-                                            },
-                                        )
-                                    } else {
-                                        val uri = pendingRecordingUri
-                                        mediaRecorder?.runCatching { stop() }
-                                        mediaRecorder?.runCatching { release() }
-                                        mediaRecorder = null
-                                        isRecording = false
-                                        if (uri != null) {
-                                            viewModel.recognize(uri)
-                                        }
-                                        pendingRecordingUri = null
-                                    }
+                            requestPermission {
+                                if (!isListening) {
+                                    startLiveRecognition(
+                                        context = context,
+                                        onStart = { isListening = true; liveError = null },
+                                        onResult = { text ->
+                                            isListening = false
+                                            viewModel.recognizeFromText(text)
+                                        },
+                                        onError = { message ->
+                                            isListening = false
+                                            liveError = message
+                                        },
+                                    )
+                                } else {
+                                    isListening = false
                                 }
-                            },
-                        ) {
-                            Icon(
-                                imageVector = if (isRecording) Icons.Default.Close else Icons.Default.PlayArrow,
-                                contentDescription = "Grabar audio",
-                            )
-                        }
-                        Text(
-                            text = "Grabar audio",
-                            style = MaterialTheme.typography.labelSmall,
+                            }
+                        },
+                    ) {
+                        Icon(
+                            imageVector = if (isListening) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = "Grabar audio",
                         )
                     }
+                    Text(
+                        text = "Grabar audio",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
-                if (isRecording) {
-                    Text("Grabando… tocá el micrófono para detener.")
-                }
+            }
+
+            if (isListening) {
+                Text("Escuchando… tocá el micrófono para detener.")
+            }
+
+            liveError?.let { error ->
+                Text(text = error, color = MaterialTheme.colorScheme.error)
             }
 
             when (val currentState = state) {
@@ -194,32 +164,76 @@ fun AudioTranscribeScreen(
                     )
                 }
                 is AudioTranscribeState.Error -> {
-                    Text(text = currentState.message)
+                    Text(text = currentState.message, color = MaterialTheme.colorScheme.error)
                 }
             }
         }
     }
 }
 
-private fun startRecording(
+/**
+ * Kicks off the built-in [SpeechRecognizer] for live microphone transcription.
+ * No file picker, no WorkManager — the system speech service streams partial +
+ * final results via [RecognitionListener] and we surface them straight to the
+ * caller. The recognizer is created on demand, lives for the duration of one
+ * listen session, and is released when [onResult] / [onError] fires.
+ */
+private fun startLiveRecognition(
     context: android.content.Context,
-    onStart: (MediaRecorder, Uri) -> Unit,
+    onStart: () -> Unit,
+    onResult: (String) -> Unit,
+    onError: (String) -> Unit,
 ) {
-    val outputDir = File(context.cacheDir, "audio").apply { mkdirs() }
-    val output = File(outputDir, "${UUID.randomUUID()}.m4a")
-    val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        MediaRecorder(context)
-    } else {
-        @Suppress("DEPRECATION")
-        MediaRecorder()
+    if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+        onError(
+            "Reconocimiento de voz no disponible. Verificá que esté habilitado en Ajustes.",
+        )
+        return
     }
-    recorder.apply {
-        setAudioSource(MediaRecorder.AudioSource.MIC)
-        setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-        setOutputFile(output.absolutePath)
-        prepare()
-        start()
+    val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+    var settled = false
+    val settle: (() -> Unit) -> Unit = { action ->
+        if (!settled) {
+            settled = true
+            runCatching { recognizer.destroy() }
+            action()
+        }
     }
-    onStart(recorder, Uri.fromFile(output))
+    recognizer.setRecognitionListener(object : RecognitionListener {
+        override fun onResults(results: android.os.Bundle?) {
+            val text = results
+                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                ?.firstOrNull()
+                .orEmpty()
+            settle { onResult(text) }
+        }
+
+        override fun onError(error: Int) {
+            settle {
+                onError("Error de reconocimiento: $error")
+            }
+        }
+
+        override fun onReadyForSpeech(params: android.os.Bundle?) {}
+        override fun onBeginningOfSpeech() {}
+        override fun onRmsChanged(rmsdB: Float) {}
+        override fun onBufferReceived(buffer: ByteArray?) {}
+        override fun onEndOfSpeech() {}
+        override fun onPartialResults(partialResults: android.os.Bundle?) {}
+        override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+    })
+    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+        putExtra(
+            RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+            RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+        )
+        putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale("es", "AR").toLanguageTag())
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+    }
+    try {
+        recognizer.startListening(intent)
+        onStart()
+    } catch (failure: Throwable) {
+        settle { onError(failure.message ?: "No se pudo iniciar el reconocimiento.") }
+    }
 }

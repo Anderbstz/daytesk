@@ -16,6 +16,7 @@ lifecycleViewmodelNav3 = "2.10.0"
 room = "2.7.1"
 work = "2.9.1"
 mlkitTextRecognition = "16.0.1"
+mlkitSpeechRecognition = "0.11.0"
 coroutinesPlayServices = "1.10.2"
 robolectric = "4.13"
 
@@ -48,6 +49,8 @@ androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version
 
 # ML Kit OCR
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkitTextRecognition" }
+# ML Kit Speech Recognition (PR2)
+mlkit-speech-recognition = { module = "com.google.mlkit:speech-recognition", version.ref = "mlkitSpeechRecognition" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
 
 # JVM Android test support

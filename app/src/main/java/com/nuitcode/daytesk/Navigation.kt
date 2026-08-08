@@ -68,6 +68,7 @@ import com.nuitcode.daytesk.ui.perfil.PerfilScreen
 import com.nuitcode.daytesk.ui.tareas.TareasScreen
 import com.nuitcode.daytesk.ui.utilidades.UtilidadesScreen
 import com.nuitcode.daytesk.utilities.ocr.ImageOcrScreen
+import com.nuitcode.daytesk.utilities.audio.AudioTranscribeScreen
 import kotlinx.coroutines.launch
 
 private data class TabItem(
@@ -339,7 +340,7 @@ private fun DayteskNavScaffold(
                     ImageOcrScreen(onBack = { backStack.removeLastOrNull() })
                 }
                 entry<AudioTranscribe> {
-                    DeferredUtilityScreen(title = "Transcribir audio")
+                    AudioTranscribeScreen(onBack = { backStack.removeLastOrNull() })
                 }
                 entry<VideoTranscribe> {
                     DeferredUtilityScreen(title = "Video a texto/audio")

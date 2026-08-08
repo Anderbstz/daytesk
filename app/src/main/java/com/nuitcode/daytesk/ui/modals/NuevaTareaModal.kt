@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -24,10 +23,17 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +48,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Prioridad
 import com.nuitcode.daytesk.model.Tarea
@@ -50,6 +57,10 @@ import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun NuevaTareaModal(
@@ -61,12 +72,25 @@ fun NuevaTareaModal(
     var selectedContexto by remember { mutableStateOf(Contexto.PERSONAL) }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
     var reminderOn by remember { mutableStateOf(false) }
+    var fechaVencimiento by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+
+    fun buildTarea(): Tarea = Tarea(
+        id = 0,
+        titulo = titulo,
+        descripcion = descripcion,
+        contexto = selectedContexto,
+        prioridad = selectedPrioridad,
+        estado = TareaEstado.PENDIENTE,
+        fechaVencimiento = fechaVencimiento,
+    )
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DayteskColors.Background)
-            .safeDrawingPadding()
     ) {
             // ── Top bar ─────────────────────────────────────
             Row(
@@ -97,21 +121,11 @@ fun NuevaTareaModal(
                     text = "Guardar",
                     style = DayteskTypography.label,
                     color = DayteskColors.Primary,
-                    modifier = Modifier.clickable {
-                        if (titulo.isNotBlank()) {
-                            onSave(
-                                Tarea(
-                                    id = 0,
-                                    titulo = titulo,
-                                    descripcion = descripcion,
-                                    contexto = selectedContexto,
-                                    prioridad = selectedPrioridad,
-                                    estado = TareaEstado.PENDIENTE,
-                                    fechaVencimiento = System.currentTimeMillis(),
-                                ),
-                            )
-                        }
-                    },
+modifier = Modifier.clickable {
+                    if (titulo.isNotBlank()) {
+                        onSave(buildTarea())
+                    }
+                },
                 )
             }
 
@@ -129,6 +143,16 @@ fun NuevaTareaModal(
                     onValueChange = { titulo = it },
                     placeholder = "Título de la tarea",
                     singleLine = true,
+                    maxLength = Tarea.TITULO_MAX_LENGTH,
+                    supportingText = {
+                        Text(
+                            text = "${titulo.length}/${Tarea.TITULO_MAX_LENGTH}",
+                            style = DayteskTypography.tiny,
+                            color = DayteskColors.TextDisabled,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
                 )
 
                 // Description textarea
@@ -138,6 +162,16 @@ fun NuevaTareaModal(
                     placeholder = "Descripción (opcional)",
                     singleLine = false,
                     minHeight = 80,
+                    maxLength = Tarea.DESCRIPCION_MAX_LENGTH,
+                    supportingText = {
+                        Text(
+                            text = "${descripcion.length}/${Tarea.DESCRIPCION_MAX_LENGTH}",
+                            style = DayteskTypography.tiny,
+                            color = DayteskColors.TextDisabled,
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.End,
+                        )
+                    },
                 )
 
                 // Divider
@@ -198,8 +232,9 @@ fun NuevaTareaModal(
                         )
                     },
                     label = "Fecha",
-                    value = "Sin fecha",
+                    value = formatTimestamp(fechaVencimiento),
                     showChevron = true,
+                    onClick = { showDatePicker = true },
                 )
 
                 // Priority row
@@ -302,21 +337,80 @@ fun NuevaTareaModal(
                     text = "Crear tarea",
                     onClick = {
                         if (titulo.isNotBlank()) {
-                            onSave(
-                                Tarea(
-                                    id = 0,
-                                    titulo = titulo,
-                                    descripcion = descripcion,
-                                    contexto = selectedContexto,
-                                    prioridad = selectedPrioridad,
-                                    estado = TareaEstado.PENDIENTE,
-                                    fechaVencimiento = System.currentTimeMillis(),
-                                ),
-                            )
+                            onSave(buildTarea())
                         }
                     },
                     enabled = titulo.isNotBlank(),
                 )
+        }
+    }
+
+    // ── Date picker dialog ─────────────────────────────
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState()
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDateMillis = datePickerState.selectedDateMillis
+                    showDatePicker = false
+                    showTimePicker = true
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancelar")
+                }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    // ── Time picker dialog (M3 has no TimePickerDialog; wrap manually) ─
+    if (showTimePicker && pendingDateMillis != null) {
+        val timeState = rememberTimePickerState(initialHour = 12, initialMinute = 0)
+        Dialog(
+            onDismissRequest = {
+                showTimePicker = false
+                pendingDateMillis = null
+            },
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = DayteskColors.Surface,
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    TimePicker(state = timeState)
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = {
+                            showTimePicker = false
+                            pendingDateMillis = null
+                        }) {
+                            Text("Cancelar")
+                        }
+                        TextButton(onClick = {
+                            val cal = Calendar.getInstance().apply {
+                                timeInMillis = pendingDateMillis!!
+                                set(Calendar.HOUR_OF_DAY, timeState.hour)
+                                set(Calendar.MINUTE, timeState.minute)
+                                set(Calendar.SECOND, 0)
+                                set(Calendar.MILLISECOND, 0)
+                            }
+                            fechaVencimiento = cal.timeInMillis
+                            showTimePicker = false
+                            pendingDateMillis = null
+                        }) {
+                            Text("OK")
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -330,40 +424,50 @@ private fun TextFieldThemed(
     placeholder: String,
     singleLine: Boolean = true,
     minHeight: Int = 0,
+    maxLength: Int? = null,
+    supportingText: (@Composable () -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(12.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (minHeight > 0) Modifier.height(minHeight.dp) else Modifier)
-            .clip(shape)
-            .background(DayteskColors.Surface)
-            .border(1.dp, DayteskColors.Border, shape)
-            .padding(horizontal = 14.dp, vertical = if (singleLine) 14.dp else 10.dp),
-    ) {
-        androidx.compose.material3.OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    style = DayteskTypography.bodyMd,
-                    color = DayteskColors.TextDisabled,
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = singleLine,
-            textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
-            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
-            colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Color.Transparent,
-                unfocusedBorderColor = Color.Transparent,
-                focusedContainerColor = Color.Transparent,
-                unfocusedContainerColor = Color.Transparent,
-                cursorColor = DayteskColors.Primary,
-            ),
-            shape = shape,
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (minHeight > 0) Modifier.height(minHeight.dp) else Modifier)
+                .clip(shape)
+                .background(DayteskColors.Surface)
+                .border(1.dp, DayteskColors.Border, shape)
+                .padding(horizontal = 14.dp, vertical = if (singleLine) 14.dp else 10.dp),
+        ) {
+            androidx.compose.material3.OutlinedTextField(
+                value = value,
+                onValueChange = { newValue ->
+                    val clamped = if (maxLength != null) newValue.take(maxLength) else newValue
+                    onValueChange(clamped)
+                },
+                placeholder = {
+                    Text(
+                        text = placeholder,
+                        style = DayteskTypography.bodyMd,
+                        color = DayteskColors.TextDisabled,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = singleLine,
+                textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
+                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    cursorColor = DayteskColors.Primary,
+                ),
+                shape = shape,
+            )
+        }
+        if (supportingText != null) {
+            supportingText()
+        }
     }
 }
 
@@ -373,9 +477,13 @@ private fun FormRow(
     label: String,
     value: String,
     showChevron: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
+    val rowModifier = Modifier.fillMaxWidth().let { base ->
+        if (onClick != null) base.clickable { onClick() } else base
+    }
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = rowModifier,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon()
@@ -426,4 +534,12 @@ private fun PillButton(
             ),
         )
     }
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+
+private fun formatTimestamp(millis: Long?): String {
+    if (millis == null) return "Sin fecha"
+    val sdf = SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.getDefault())
+    return sdf.format(Date(millis))
 }

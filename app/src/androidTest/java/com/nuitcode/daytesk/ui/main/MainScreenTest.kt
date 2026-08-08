@@ -1,13 +1,15 @@
 package com.nuitcode.daytesk.ui.main
 
 import androidx.activity.ComponentActivity
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodes
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodes
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import com.nuitcode.daytesk.DayteskApp
 import com.nuitcode.daytesk.data.DataRepository
 import com.nuitcode.daytesk.data.DayteskData
@@ -106,6 +108,15 @@ class MainScreenTest {
     @Test
     fun inicioTopBar_displayNameIsDisplayed() {
         composeTestRule.onNodeWithText("Andrés").assertIsDisplayed()
+    }
+
+    // ── tasks-form-completion REQ-01 / REQ-02 — modal reachability ──
+
+    @Test
+    fun nuevaTareaModal_canBeOpened() {
+        composeTestRule.onNodeWithText("Tareas").performClick()
+        composeTestRule.onNodeWithContentDescription("Agregar tarea").performClick()
+        composeTestRule.onNodeWithText("Nueva tarea").assertIsDisplayed()
     }
 }
 

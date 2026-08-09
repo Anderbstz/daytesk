@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -100,8 +101,8 @@ fun NuevaTareaModal(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars)
             .background(DayteskColors.Background)
+            .systemBarsPadding()
     ) {
             // ── Top bar ─────────────────────────────────────
             Row(
@@ -119,15 +120,17 @@ fun NuevaTareaModal(
                         .size(24.dp)
                         .clickable { onDismiss() },
                 )
-                Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = "Nueva tarea",
                     style = DayteskTypography.h1,
                     color = DayteskColors.TextPrimary,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = DayteskSpacing.sm),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
                 )
-                Spacer(modifier = Modifier.weight(1f))
                 Text(
                     text = "Guardar",
                     style = DayteskTypography.label,

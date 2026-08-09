@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -301,7 +302,9 @@ private fun DayteskNavScaffold(
                 containerColor = DayteskColors.Primary,
                 contentColor = Color.White,
                 shape = CircleShape,
-                modifier = Modifier.size(56.dp),
+                modifier = Modifier
+                    .windowInsetsPadding(WindowInsets.navigationBars)
+                    .size(56.dp),
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
@@ -446,13 +449,14 @@ private fun DayteskBottomBar(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(72.dp),
+            .windowInsetsPadding(WindowInsets.navigationBars),
         color = Color.White,
         shadowElevation = 8.dp,
     ) {
         Row(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .height(72.dp)
                 .padding(horizontal = DayteskSpacing.sm),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,

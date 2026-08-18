@@ -74,6 +74,19 @@ object Migrations {
             }
         }
     }
+
+    val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `tareas` ADD COLUMN `fechaCompletada` INTEGER")
+            db.execSQL(
+                """
+                UPDATE `tareas`
+                SET `fechaCompletada` = `fechaCreacion`
+                WHERE `estado` = 'COMPLETADA' AND `fechaCompletada` IS NULL
+                """.trimIndent(),
+            )
+        }
+    }
 }
 
 /**

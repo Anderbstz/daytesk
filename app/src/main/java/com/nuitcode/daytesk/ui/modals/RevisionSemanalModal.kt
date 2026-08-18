@@ -40,20 +40,22 @@ private data class ChecklistItem(
     val subtitle: String? = null,
 )
 
-private val checklistItems = listOf(
-    ChecklistItem("Procesar inbox", "5 items pendientes"),
-    ChecklistItem("Revisar vencidas", "2 tareas vencidas"),
-    ChecklistItem("Actualizar próximas acciones"),
-    ChecklistItem("Revisar proyectos"),
-    ChecklistItem("Limpiar completadas", "8 tareas para archivar"),
-)
-
 @Composable
 fun RevisionSemanalModal(
+    inboxPendientes: Int,
+    tareasVencidas: Int,
+    tareasCompletadas: Int,
     onDismiss: () -> Unit,
     onCompletar: () -> Unit,
     onProgramar: () -> Unit = {},
 ) {
+    val checklistItems = listOf(
+        ChecklistItem("Procesar inbox", "$inboxPendientes items pendientes"),
+        ChecklistItem("Revisar vencidas", "$tareasVencidas tareas vencidas"),
+        ChecklistItem("Actualizar próximas acciones"),
+        ChecklistItem("Revisar proyectos"),
+        ChecklistItem("Limpiar completadas", "$tareasCompletadas tareas para archivar"),
+    )
     var checkedItems by remember { mutableStateOf(setOf<Int>()) }
     val totalItems = checklistItems.size
     val checkedCount = checkedItems.size

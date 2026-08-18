@@ -42,20 +42,18 @@ interface ContextoDao {
     @Query("SELECT COUNT(*) FROM tareas WHERE contextoId = :id")
     suspend fun countTareasForContext(id: Long): Int
 
+    @Query("UPDATE tareas SET contextoId = :newId WHERE contextoId = :oldId")
+    suspend fun reassignTareas(oldId: Long, newId: Long)
+
     /**
-     * Atomically deletes a context iff it is non-default AND no `Tarea`
-     * references it. Runs inside a single Room transaction so the count and
-     * the delete share the same DB connection — closes the race window from
-     * spec risk #3.
+     * Deletes a context when no `Tarea` references it.
      *
-     * Return value (sentinel):
-     *   - `-1` when the context is a default (refused; row untouched)
-     *   - `>0` (count of referencing tareas) when in use (refused; row untouched)
+     * Return value:
+     *   - `>0` (count of referencing tareas) when in use (row untouched)
      *   - `0` on success (row removed)
      */
     @Transaction
     suspend fun deleteIfUnreferenced(entity: ContextoEntity): Int {
-        if (entity.esDefault) return -1
         val count = countTareasForContext(entity.id)
         if (count > 0) return count
         delete(entity)

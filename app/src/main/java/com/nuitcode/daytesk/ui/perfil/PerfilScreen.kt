@@ -17,10 +17,17 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.nuitcode.daytesk.model.DayteskUser
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +52,10 @@ import kotlin.math.sin
 fun PerfilScreen(
     data: DayteskData,
     onNavigateContextos: () -> Unit = {},
+    onNavigateConfiguracion: () -> Unit = {},
+    onNavigateAyuda: () -> Unit = {},
+    onNavigateHistorial: () -> Unit = {},
+    onClearLocalData: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -63,7 +74,13 @@ fun PerfilScreen(
         Spacer(modifier = Modifier.height(DayteskSpacing.xxxl))
 
         // ── 3. Settings List ───────────────────────────────────
-        SettingsList(onNavigateContextos = onNavigateContextos)
+        SettingsList(
+            onNavigateContextos = onNavigateContextos,
+            onNavigateConfiguracion = onNavigateConfiguracion,
+            onNavigateAyuda = onNavigateAyuda,
+            onNavigateHistorial = onNavigateHistorial,
+            onClearLocalData = onClearLocalData,
+        )
     }
 }
 
@@ -95,7 +112,7 @@ private fun ProfileHeader() {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "AN",
+                text = DayteskUser.initials,
                 style = TextStyle(
                     fontWeight = FontWeight.Bold,
                     fontSize = 28.sp,
@@ -107,13 +124,13 @@ private fun ProfileHeader() {
         Spacer(modifier = Modifier.height(DayteskSpacing.md))
 
         Text(
-            text = "Andrés",
+            text = DayteskUser.displayName,
             style = DayteskTypography.h1,
             color = DayteskColors.TextPrimary,
         )
 
         Text(
-            text = "andres@daytesk.app",
+            text = DayteskUser.email,
             style = DayteskTypography.bodySm,
             color = DayteskColors.TextSecondary,
         )
@@ -194,11 +211,19 @@ private fun StatCard(
 // ═══════════════════════════════════════════════════════════════
 
 @Composable
-private fun SettingsList(onNavigateContextos: () -> Unit = {}) {
+private fun SettingsList(
+    onNavigateContextos: () -> Unit,
+    onNavigateConfiguracion: () -> Unit,
+    onNavigateAyuda: () -> Unit,
+    onNavigateHistorial: () -> Unit,
+    onClearLocalData: () -> Unit,
+) {
+    var showLogoutConfirm by remember { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth()) {
         SettingsRow(
             icon = { GearIcon() },
             text = "Configuración",
+            onClick = onNavigateConfiguracion,
         )
         SettingsDivider()
         SettingsRow(
@@ -208,14 +233,44 @@ private fun SettingsList(onNavigateContextos: () -> Unit = {}) {
         )
         SettingsDivider()
         SettingsRow(
+            icon = { FolderIcon() },
+            text = "Historial",
+            onClick = onNavigateHistorial,
+        )
+        SettingsDivider()
+        SettingsRow(
             icon = { InfoIcon() },
             text = "Ayuda y soporte",
+            onClick = onNavigateAyuda,
         )
         SettingsDivider()
         SettingsRow(
             icon = { LogoutIcon() },
             text = "Cerrar sesión",
             textColor = DayteskColors.Urgent,
+            onClick = { showLogoutConfirm = true },
+        )
+    }
+    if (showLogoutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showLogoutConfirm = false },
+            title = { Text("Cerrar sesión") },
+            text = {
+                Text("Daytesk no usa cuenta en la nube. Esto borra tareas e inbox de este dispositivo.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onClearLocalData()
+                    showLogoutConfirm = false
+                }) {
+                    Text("Borrar datos", color = DayteskColors.Urgent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutConfirm = false }) {
+                    Text("Cancelar")
+                }
+            },
         )
     }
 }

@@ -1,6 +1,10 @@
 package com.nuitcode.daytesk.utilities.video
 
 import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -52,7 +56,7 @@ fun VideoTranscribeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Video a texto/audio") },
+                title = { Text("Transcribir video") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
@@ -69,20 +73,22 @@ fun VideoTranscribeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             NetworkDisclosure()
-            Text("La transcripción de archivos de video llegará en una próxima versión.")
+            Text("Elegí un archivo de video (mp4, mov, webm, mkv). Extraemos el audio y lo transcribimos en el teléfono. Videos muy largos usan los primeros 10 minutos.")
 
-            Surface(
+            val videoPicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument(),
+            ) { uri: Uri? ->
+                uri?.let { viewModel.enqueue(it) }
+            }
+            Button(
+                onClick = { videoPicker.launch(arrayOf("video/*")) },
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = MaterialTheme.shapes.medium,
+                enabled = state !is VideoTranscribeState.Extracting &&
+                    state !is VideoTranscribeState.Transcribing &&
+                    state !is VideoTranscribeState.DownloadingModel &&
+                    state !is VideoTranscribeState.Queued,
             ) {
-                Text(
-                    text = "Próximamente: extracción de audio on-device y transcripción " +
-                        "con un modelo liviano (Whisper o Vosk). Por ahora, la herramienta " +
-                        "de audio graba directamente desde el micrófono.",
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                Text("Seleccionar video")
             }
 
             when (val currentState = state) {
@@ -95,6 +101,14 @@ fun VideoTranscribeScreen(
                         visible = true,
                         label = "Extrayendo audio…",
                         progress = currentState.progress,
+                        onCancel = viewModel::cancel,
+                    )
+                }
+
+                VideoTranscribeState.DownloadingModel -> {
+                    TranscriptionProgress(
+                        visible = true,
+                        label = "Descargando modelo de voz (solo la primera vez)…",
                         onCancel = viewModel::cancel,
                     )
                 }

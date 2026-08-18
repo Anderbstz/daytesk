@@ -6,18 +6,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -33,9 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.InboxItem
 import com.nuitcode.daytesk.model.Prioridad
@@ -44,16 +41,25 @@ import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProcesarInboxModal(
     item: InboxItem,
     onDismiss: () -> Unit,
-    onSave: (Contexto, Prioridad) -> Unit,
+    onSave: (Contexto, Prioridad, Long?) -> Unit,
     onDelete: () -> Unit,
     contextos: List<Contexto> = Contexto.DEFAULTS,
+    canAddContexto: Boolean = contextos.size < Contexto.MAX_COUNT,
+    onAddContexto: (() -> Unit)? = null,
 ) {
-    var selectedContexto by remember { mutableStateOf(Contexto.DEFAULTS[2]) }
+    var selectedContexto by remember(contextos) {
+        mutableStateOf(contextos.firstOrNull() ?: Contexto.FALLBACK)
+    }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
+    var fechaVencimiento by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
 
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -71,7 +77,7 @@ fun ProcesarInboxModal(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .systemBarsPadding()
+                .navigationBarsPadding()
                 .clip(DayteskShapes.large)
                 .background(DayteskColors.Surface)
                 .clickable(enabled = false) { }
@@ -118,12 +124,15 @@ fun ProcesarInboxModal(
                     color = DayteskColors.TextSecondary,
                     modifier = Modifier.padding(bottom = DayteskSpacing.sm),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.sm)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.md),
+                    verticalArrangement = Arrangement.spacedBy(DayteskSpacing.md),
+                ) {
                     contextos.forEach { ctx ->
                         val isSelected = ctx == selectedContexto
                         Box(
                             modifier = Modifier
-                                .height(32.dp)
+                                .height(40.dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(
                                     if (isSelected) ctx.colorLight()
@@ -134,13 +143,30 @@ fun ProcesarInboxModal(
                                     else Modifier
                                 )
                                 .clickable { selectedContexto = ctx }
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = DayteskSpacing.lg),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = ctx.label(),
                                 style = DayteskTypography.bodySm,
                                 color = if (isSelected) ctx.color() else DayteskColors.TextSecondary,
+                            )
+                        }
+                    }
+                    if (canAddContexto && onAddContexto != null) {
+                            Box(
+                                modifier = Modifier
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(DayteskColors.PrimaryLight)
+                                .clickable { onAddContexto() }
+                                .padding(horizontal = DayteskSpacing.lg),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "+",
+                                style = DayteskTypography.bodySm,
+                                color = DayteskColors.Primary,
                             )
                         }
                     }
@@ -151,6 +177,7 @@ fun ProcesarInboxModal(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable { showDatePicker = true }
                     .padding(vertical = DayteskSpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -158,11 +185,11 @@ fun ProcesarInboxModal(
                     imageVector = Icons.Default.DateRange,
                     contentDescription = "Asignar fecha",
                     tint = DayteskColors.TextDisabled,
-                    modifier = Modifier.size(20.dp),
+                    modifier = Modifier.size(DayteskSpacing.xl),
                 )
                 Spacer(modifier = Modifier.width(DayteskSpacing.sm))
                 Text(
-                    text = "Asignar fecha",
+                    text = fechaVencimiento?.let { formatInboxFecha(it) } ?: "Asignar fecha",
                     style = DayteskTypography.bodySm,
                     color = DayteskColors.TextSecondary,
                 )
@@ -176,12 +203,12 @@ fun ProcesarInboxModal(
                     color = DayteskColors.TextSecondary,
                     modifier = Modifier.padding(bottom = DayteskSpacing.sm),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.md)) {
                     Prioridad.entries.forEach { p ->
                         val isSelected = p == selectedPrioridad
                         Box(
                             modifier = Modifier
-                                .height(32.dp)
+                                .height(40.dp)
                                 .clip(RoundedCornerShape(50))
                                 .background(
                                     if (isSelected) p.colorLight()
@@ -192,12 +219,12 @@ fun ProcesarInboxModal(
                                     else Modifier
                                 )
                                 .clickable { selectedPrioridad = p }
-                                .padding(horizontal = 14.dp),
+                                .padding(horizontal = DayteskSpacing.lg),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
                                 text = p.label(),
-                                style = DayteskTypography.badge,
+                                    style = DayteskTypography.bodySm,
                                 color = if (isSelected) p.color() else DayteskColors.TextSecondary,
                             )
                         }
@@ -205,13 +232,12 @@ fun ProcesarInboxModal(
                 }
             }
 
-            // Divider (visual)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(vertical = DayteskSpacing.sm)
                     .height(1.dp)
-                    .background(DayteskColors.Divider)
-                    .padding(vertical = DayteskSpacing.sm),
+                    .background(DayteskColors.Divider),
             )
 
             // Bottom row: Eliminar + Guardar
@@ -228,15 +254,15 @@ fun ProcesarInboxModal(
                     color = DayteskColors.Urgent,
                     modifier = Modifier
                         .clickable { onDelete() }
-                        .padding(vertical = 12.dp),
+                        .padding(vertical = DayteskSpacing.md),
                 )
 
                 Box(
                     modifier = Modifier
                         .clip(DayteskShapes.pill)
                         .background(DayteskColors.Primary)
-                        .clickable { onSave(selectedContexto, selectedPrioridad) }
-                        .padding(horizontal = 32.dp, vertical = 12.dp),
+                        .clickable { onSave(selectedContexto, selectedPrioridad, fechaVencimiento) }
+                        .padding(horizontal = DayteskSpacing.xxxl, vertical = DayteskSpacing.md),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -250,4 +276,33 @@ fun ProcesarInboxModal(
             }
         }
     }
+
+    if (showDatePicker) {
+        DayteskDatePickerDialog(
+            onDismiss = { showDatePicker = false },
+            onDateSelected = { selected ->
+                pendingDateMillis = selected
+                showTimePicker = true
+            },
+        )
+    }
+    if (showTimePicker && pendingDateMillis != null) {
+        DayteskTimePickerDialog(
+            utcDateMillis = pendingDateMillis!!,
+            onDismiss = {
+                showTimePicker = false
+                pendingDateMillis = null
+            },
+            onConfirm = { millis ->
+                fechaVencimiento = millis
+                showTimePicker = false
+                pendingDateMillis = null
+            },
+        )
+    }
+}
+
+private fun formatInboxFecha(millis: Long): String {
+    val sdf = java.text.SimpleDateFormat("dd MMM yyyy, HH:mm", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(millis))
 }

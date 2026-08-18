@@ -4,20 +4,16 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import com.nuitcode.daytesk.utilities.audio.AudioTranscribeWorker
+import com.nuitcode.daytesk.utilities.common.MediaKind
+import com.nuitcode.daytesk.utilities.common.VoskTranscriber
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
 /**
@@ -32,6 +28,7 @@ sealed interface VideoTranscribeState {
     data object Idle : VideoTranscribeState
     data object Queued : VideoTranscribeState
     data class Extracting(val progress: Float) : VideoTranscribeState
+    data object DownloadingModel : VideoTranscribeState
     data object Transcribing : VideoTranscribeState
     data class Success(val text: String) : VideoTranscribeState
     data class Error(val message: String) : VideoTranscribeState
@@ -46,6 +43,7 @@ sealed interface VideoTranscribeState {
 sealed interface VideoTranscribePhase {
     data object Queued : VideoTranscribePhase
     data class Extracting(val progress: Float) : VideoTranscribePhase
+    data object DownloadingModel : VideoTranscribePhase
     data object Transcribing : VideoTranscribePhase
     data class Completed(val text: String) : VideoTranscribePhase
     data class Failed(val message: String) : VideoTranscribePhase
@@ -65,7 +63,7 @@ class VideoTranscribeViewModel(
     private val coroutineScope: CoroutineScope? = null,
 ) : ViewModel() {
     constructor(context: Context) : this(
-        WorkManagerVideoTranscribeScheduler(WorkManager.getInstance(context)),
+        InProcessVideoTranscribeScheduler(context.applicationContext),
     )
 
     val state = MutableStateFlow<VideoTranscribeState>(VideoTranscribeState.Idle)
@@ -81,6 +79,7 @@ class VideoTranscribeViewModel(
                     is VideoTranscribePhase.Extracting -> VideoTranscribeState.Extracting(
                         phase.progress.coerceIn(0f, 1f),
                     )
+                    VideoTranscribePhase.DownloadingModel -> VideoTranscribeState.DownloadingModel
                     VideoTranscribePhase.Transcribing -> VideoTranscribeState.Transcribing
                     is VideoTranscribePhase.Completed -> VideoTranscribeState.Success(phase.text)
                     is VideoTranscribePhase.Failed -> VideoTranscribeState.Error(phase.message)
@@ -97,81 +96,38 @@ class VideoTranscribeViewModel(
 }
 
 /**
- * Production scheduler that drives the ViewModel from WorkManager's
- * `getWorkInfoByIdFlow`. The worker's `setProgress(workDataOf("progress" to pct))`
- * calls map to `Extracting(progress)`; the chained AudioTranscribeWorker
- * progress maps to `Transcribing` until SUCCEEDED → Completed.
- *
- * The scheduler tracks the most recent enqueued request ID so `cancel()` can
- * synchronously cancel it on the WorkManager instance.
+ * Runs extraction and recognition in the app process while the screen is open.
+ * Background workers lose the temporary read grant that the file picker hands
+ * out, so the whole pipeline stays in the foreground instead.
  */
-private class WorkManagerVideoTranscribeScheduler(
-    private val workManager: WorkManager,
+private class InProcessVideoTranscribeScheduler(
+    private val context: Context,
 ) : VideoTranscribeWorkScheduler {
-    @Volatile private var activeRequestId: java.util.UUID? = null
 
-    override fun enqueue(uri: Uri): Flow<VideoTranscribePhase> = callbackFlow {
-        val request = OneTimeWorkRequestBuilder<VideoTranscribeWorker>()
-            .setInputData(VideoTranscribeWorker.inputData(uri.toString()))
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build(),
-            )
-            .build()
-        activeRequestId = request.id
-
-        val observer = launch {
-            workManager.getWorkInfoByIdFlow(request.id).collectLatest { info ->
-                when (info?.state) {
-                    WorkInfo.State.ENQUEUED -> trySend(VideoTranscribePhase.Queued)
-                    WorkInfo.State.RUNNING -> {
-                        val progress = info.progress
-                            .getInt(VideoTranscribeWorker.PROGRESS_KEY, -1)
-                        when {
-                            progress in 0..50 ->
-                                trySend(VideoTranscribePhase.Extracting(progress / 50f))
-                            progress in 51..99 ->
-                                trySend(VideoTranscribePhase.Transcribing)
-                            else -> trySend(VideoTranscribePhase.Transcribing)
-                        }
-                    }
-                    WorkInfo.State.SUCCEEDED -> {
-                        trySend(
-                            VideoTranscribePhase.Completed(
-                                info.outputData.getString(AudioTranscribeWorker.OUTPUT_TEXT).orEmpty(),
-                            ),
-                        )
-                        close()
-                    }
-                    WorkInfo.State.FAILED -> {
-                        trySend(
-                            VideoTranscribePhase.Failed(
-                                info.outputData.getString(VideoTranscribeWorker.OUTPUT_ERROR)
-                                    ?: "No se pudo transcribir el video.",
-                            ),
-                        )
-                        close()
-                    }
-                    WorkInfo.State.CANCELLED -> {
-                        trySend(VideoTranscribePhase.Failed("Transcripción de video cancelada."))
-                        close()
-                    }
-                    else -> Unit
-                }
-            }
+    override fun enqueue(uri: Uri): Flow<VideoTranscribePhase> = flow {
+        emit(VideoTranscribePhase.Extracting(0.15f))
+        val wav = try {
+            VoskTranscriber.extractWav(context, uri, MediaKind.VIDEO)
+        } catch (failure: Throwable) {
+            emit(VideoTranscribePhase.Failed(failure.userMessage("No se pudo extraer el audio del video.")))
+            return@flow
         }
-        workManager.enqueue(request)
-        awaitClose {
-            observer.cancel()
-            // Defensive: cancel the request from the flow teardown path too.
-            activeRequestId?.let { workManager.cancelWorkById(it) }
-            activeRequestId = null
+        emit(VideoTranscribePhase.Extracting(1f))
+        if (!VoskTranscriber.isModelReady(context)) {
+            emit(VideoTranscribePhase.DownloadingModel)
         }
-    }
+        emit(VideoTranscribePhase.Transcribing)
+        try {
+            emit(VideoTranscribePhase.Completed(VoskTranscriber.transcribeWav(context, wav)))
+        } catch (failure: Throwable) {
+            emit(VideoTranscribePhase.Failed(failure.userMessage("No se pudo transcribir el video.")))
+        } finally {
+            wav.delete()
+        }
+    }.flowOn(Dispatchers.IO)
 
-    override fun cancel() {
-        activeRequestId?.let { workManager.cancelWorkById(it) }
-        activeRequestId = null
-    }
+    override fun cancel() = Unit
 }
+
+private fun Throwable.userMessage(fallback: String): String =
+    message?.takeIf { it.isNotBlank() } ?: fallback

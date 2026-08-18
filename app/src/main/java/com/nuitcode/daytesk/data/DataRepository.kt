@@ -29,7 +29,7 @@ class DefaultDataRepository(
     ) { tareaEntities, inboxEntities, contextoEntities ->
         val contextos = contextoEntities.map { it.toDomain() }
         val contextosById = contextos.associateBy { it.id }
-        val fallback = Contexto.DEFAULTS.first { it.id == 3L }
+        val fallback = Contexto.FALLBACK
 
         val tareas = tareaEntities.map { entity ->
             val tarea = entity.toDomain()
@@ -37,17 +37,24 @@ class DefaultDataRepository(
             tarea.copy(contexto = resolved)
         }
 
-        val completadas = tareas.filter { it.estado == TareaEstado.COMPLETADA }
-        val hoy = tareas.filter { it.estado != TareaEstado.COMPLETADA && esHoy(it) }
-        val semana = tareas.filter {
-            it.estado != TareaEstado.COMPLETADA && !esHoy(it) && esEstaSemana(it)
-        }
+        val completadas = tareas
+            .filter { it.estado == TareaEstado.COMPLETADA }
+            .sortedByDescending { it.fechaCompletada ?: it.fechaCreacion }
+        val pendientes = tareas.filter { it.estado != TareaEstado.COMPLETADA }
+        val hoy = pendientes.filter { esHoy(it) }
+        val semana = pendientes.filter { !esHoy(it) && esEstaSemana(it) }
+        val vencidas = pendientes.filter { estaVencida(it) }
+        val otras = pendientes.filter { !esHoy(it) && !esEstaSemana(it) }
+        val racha = StreakCalculator.currentStreak(
+            completadas.mapNotNull { it.fechaCompletada ?: it.fechaCreacion },
+        )
 
         DayteskData(
             stats = DayteskStats(
                 tareasHoy = hoy.size,
                 inboxPendientes = inboxItems(inboxEntities).size,
                 tareasCompletadas = completadas.size,
+                rachaActual = racha,
                 totalCompletadasHistorico = completadas.size,
             ),
             tareasHoy = hoy,
@@ -57,6 +64,8 @@ class DefaultDataRepository(
             alertas = emptyList(),
             contextos = contextos,
             weeklyReview = emptyList(),
+            otrasPendientes = otras,
+            vencidas = vencidas,
         )
     }.catch { _ ->
         emit(
@@ -74,6 +83,17 @@ class DefaultDataRepository(
 
     private fun inboxItems(entities: List<InboxItemEntity>) =
         entities.map { it.toDomain() }
+
+    private fun estaVencida(tarea: Tarea): Boolean {
+        val venc = tarea.fechaVencimiento ?: return false
+        val startOfToday = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return venc < startOfToday.timeInMillis
+    }
 
     private fun esHoy(tarea: Tarea): Boolean {
         val venc = tarea.fechaVencimiento ?: return false

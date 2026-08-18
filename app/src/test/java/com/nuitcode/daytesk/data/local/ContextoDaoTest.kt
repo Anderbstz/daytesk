@@ -82,7 +82,7 @@ class ContextoDaoTest {
     }
 
     @Test
-    fun deleteIfUnreferenced_refusesDefault_returnsNegativeOne() = runTest {
+    fun deleteIfUnreferenced_allowsDefaultWhenUnused() = runTest {
         val casa = ContextoEntity(
             id = 1,
             nombre = "casa",
@@ -94,15 +94,8 @@ class ContextoDaoTest {
 
         val result = contextoDao.deleteIfUnreferenced(casa)
 
-        assertEquals(
-            "deleteIfUnreferenced MUST refuse default contexts with sentinel -1",
-            -1,
-            result,
-        )
-        assertNotNull(
-            "default context MUST still exist after refused delete",
-            contextoDao.getById(1),
-        )
+        assertEquals(0, result)
+        assertEquals(null, contextoDao.getById(1))
     }
 
     @Test

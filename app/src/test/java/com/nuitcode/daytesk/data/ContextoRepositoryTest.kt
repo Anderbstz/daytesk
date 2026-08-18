@@ -2,7 +2,6 @@ package com.nuitcode.daytesk.data
 
 import com.nuitcode.daytesk.data.local.ContextoDao
 import com.nuitcode.daytesk.data.local.ContextoEntity
-import com.nuitcode.daytesk.data.local.DefaultContextoRepository
 import com.nuitcode.daytesk.model.Contexto
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -82,21 +81,17 @@ class ContextoRepositoryTest {
     }
 
     @Test
-    fun add_refusesNameCollidingWithDefault() = runTest {
-        val dao = FakeContextoDao()
-        val repo = DefaultContextoRepository(dao)
-
-        val result = repo.add(
-            Contexto(id = 0, nombre = "CASA", color = 0xFF000000.toInt()),
-        )
-
-        assertTrue("add() must refuse name colliding with default", result.isFailure)
-        assertEquals(0, dao.all.size)
-    }
-
-    @Test
     fun delete_succeedsForCustomWithZeroTareas() = runTest {
         val dao = FakeContextoDao().apply {
+            insert(
+                ContextoEntity(
+                    id = 4,
+                    nombre = "otro",
+                    color = 0xFF000000.toInt(),
+                    orden = 1,
+                    esDefault = false,
+                ),
+            )
             insert(
                 ContextoEntity(
                     id = 5,
@@ -116,7 +111,38 @@ class ContextoRepositoryTest {
     }
 
     @Test
-    fun delete_refusesDefaultContext() = runTest {
+    fun delete_succeedsForDefaultWhenAnotherExists() = runTest {
+        val dao = FakeContextoDao().apply {
+            insert(
+                ContextoEntity(
+                    id = 1,
+                    nombre = "casa",
+                    color = 0xFFFBC4AB.toInt(),
+                    orden = 1,
+                    esDefault = true,
+                ),
+            )
+            insert(
+                ContextoEntity(
+                    id = 2,
+                    nombre = "trabajo",
+                    color = 0xFF90CAF9.toInt(),
+                    orden = 2,
+                    esDefault = true,
+                ),
+            )
+        }
+        val repo = DefaultContextoRepository(dao)
+
+        val result = repo.delete(1)
+
+        assertTrue("delete() must succeed for a default when another context remains", result.isSuccess)
+        assertNull(dao.getById(1))
+        assertNotNull(dao.getById(2))
+    }
+
+    @Test
+    fun delete_refusesLastContext() = runTest {
         val dao = FakeContextoDao().apply {
             insert(
                 ContextoEntity(
@@ -132,17 +158,13 @@ class ContextoRepositoryTest {
 
         val result = repo.delete(1)
 
-        assertTrue("delete() must refuse default context", result.isFailure)
-        val ex = result.exceptionOrNull()
-        assertTrue(
-            "exception must be DefaultContextProtectedException, got $ex",
-            ex is DefaultContextProtectedException,
-        )
-        assertNotNull("default context MUST still exist after refused delete", dao.getById(1))
+        assertTrue("delete() must refuse the last remaining context", result.isFailure)
+        assertTrue(result.exceptionOrNull() is LastContextoException)
+        assertNotNull(dao.getById(1))
     }
 
     @Test
-    fun delete_refusesInUseCustomContext() = runTest {
+    fun delete_reassignsTareasThenDeletes() = runTest {
         val dao = FakeContextoDao().apply {
             insert(
                 ContextoEntity(
@@ -153,20 +175,47 @@ class ContextoRepositoryTest {
                     esDefault = false,
                 ),
             )
+            insert(
+                ContextoEntity(
+                    id = 8,
+                    nombre = "otro",
+                    color = 0xFF000000.toInt(),
+                    orden = 6,
+                    esDefault = false,
+                ),
+            )
             countFor[7L] = 3
         }
         val repo = DefaultContextoRepository(dao)
 
         val result = repo.delete(7)
 
-        assertTrue("delete() must refuse in-use custom context", result.isFailure)
-        val ex = result.exceptionOrNull()
-        assertTrue(
-            "exception must be ContextoInUseException, got $ex",
-            ex is ContextoInUseException,
-        )
-        assertEquals(3, (ex as ContextoInUseException).count)
-        assertNotNull("context MUST still exist after refused delete", dao.getById(7))
+        assertTrue("delete() must reassign tareas and succeed", result.isSuccess)
+        assertNull(dao.getById(7))
+        assertEquals(3, dao.countFor[8L])
+    }
+
+    @Test
+    fun add_refusesWhenAtMax() = runTest {
+        val dao = FakeContextoDao().apply {
+            repeat(Contexto.MAX_COUNT) { index ->
+                insert(
+                    ContextoEntity(
+                        id = 0,
+                        nombre = "ctx$index",
+                        color = 0xFF000000.toInt(),
+                        orden = index,
+                        esDefault = false,
+                    ),
+                )
+            }
+        }
+        val repo = DefaultContextoRepository(dao)
+
+        val result = repo.add(Contexto(id = 0, nombre = "extra", color = 0xFF111111.toInt()))
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is ContextoLimitException)
     }
 
     @Test
@@ -240,32 +289,6 @@ class ContextoRepositoryTest {
 
         assertEquals(listOf("aaa", "mmm", "zzz"), list.map { it.nombre })
     }
-
-    @Test
-    fun repository_exposesTripleGateDefaultProtection() = runTest {
-        // REQ-05 — triple-gate: the repository MUST refuse default deletion
-        // even if a hypothetical direct-DAO caller bypassed the UI.
-        val dao = FakeContextoDao().apply {
-            insert(
-                ContextoEntity(
-                    id = 1,
-                    nombre = "casa",
-                    color = 0xFFFBC4AB.toInt(),
-                    orden = 1,
-                    esDefault = true,
-                ),
-            )
-        }
-        val repo = DefaultContextoRepository(dao)
-
-        val result = repo.delete(1)
-
-        assertTrue("repository MUST refuse default deletion", result.isFailure)
-        assertTrue(
-            "result must wrap DefaultContextProtectedException",
-            result.exceptionOrNull() is DefaultContextProtectedException,
-        )
-    }
 }
 
 /**
@@ -312,9 +335,13 @@ private class FakeContextoDao : ContextoDao {
 
     override suspend fun countTareasForContext(id: Long): Int = countFor[id] ?: 0
 
+    override suspend fun reassignTareas(oldId: Long, newId: Long) {
+        val moving = countFor.remove(oldId) ?: 0
+        countFor[newId] = (countFor[newId] ?: 0) + moving
+    }
+
     @androidx.room.Transaction
     override suspend fun deleteIfUnreferenced(entity: ContextoEntity): Int {
-        if (entity.esDefault) return -1
         val count = countTareasForContext(entity.id)
         if (count > 0) return count
         storage.removeAll { it.id == entity.id }

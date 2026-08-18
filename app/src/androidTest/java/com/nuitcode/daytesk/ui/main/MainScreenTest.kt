@@ -111,7 +111,7 @@ class MainScreenTest {
 
     @Test
     fun inicioTopBar_displayNameIsDisplayed() {
-        composeTestRule.onNodeWithText("Andrés").assertIsDisplayed()
+        composeTestRule.onNodeWithText("ander").assertIsDisplayed()
     }
 
     // ── tasks-form-completion REQ-01 / REQ-02 — modal reachability ──

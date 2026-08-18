@@ -6,18 +6,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -25,15 +25,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -66,26 +62,33 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import java.util.TimeZone
+import androidx.compose.ui.graphics.SolidColor
 
-@OptIn(ExperimentalMaterial3Api::class)
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NuevaTareaModal(
     onDismiss: () -> Unit,
     onSave: (Tarea) -> Unit,
     contextos: List<Contexto> = Contexto.DEFAULTS,
+    canAddContexto: Boolean = contextos.size < Contexto.MAX_COUNT,
+    onAddContexto: (() -> Unit)? = null,
 ) {
     var titulo by remember { mutableStateOf("") }
     var descripcion by remember { mutableStateOf("") }
-    var selectedContextoId by remember { mutableStateOf(3L) }
+    var selectedContextoId by remember(contextos) {
+        mutableStateOf((contextos.firstOrNull() ?: Contexto.FALLBACK).id)
+    }
     var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
-    var reminderOn by remember { mutableStateOf(false) }
     var fechaVencimiento by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
 
     val selectedContexto = contextos.firstOrNull { it.id == selectedContextoId }
-        ?: Contexto.DEFAULTS.first { it.id == 3L }
+        ?: contextos.firstOrNull()
+        ?: Contexto.FALLBACK
 
     fun buildTarea(): Tarea = Tarea(
         id = 0,
@@ -105,19 +108,18 @@ fun NuevaTareaModal(
             .systemBarsPadding()
     ) {
             // ── Top bar ─────────────────────────────────────
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = DayteskSpacing.xl, vertical = DayteskSpacing.xl),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Close button
                 Icon(
                     imageVector = Icons.Default.Close,
                     contentDescription = "Cerrar",
                     tint = DayteskColors.TextDisabled,
                     modifier = Modifier
-                        .size(24.dp)
+                        .align(Alignment.CenterStart)
+                        .size(DayteskSpacing.xxl)
                         .clickable { onDismiss() },
                 )
                 Text(
@@ -125,8 +127,8 @@ fun NuevaTareaModal(
                     style = DayteskTypography.h1,
                     color = DayteskColors.TextPrimary,
                     modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = DayteskSpacing.sm),
+                        .align(Alignment.Center)
+                        .padding(horizontal = DayteskSpacing.xxxxl),
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
@@ -135,11 +137,13 @@ fun NuevaTareaModal(
                     text = "Guardar",
                     style = DayteskTypography.label,
                     color = DayteskColors.Primary,
-                    modifier = Modifier.clickable {
-                        if (titulo.isNotBlank()) {
-                            onSave(buildTarea())
-                        }
-                    },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .clickable {
+                            if (titulo.isNotBlank()) {
+                                onSave(buildTarea())
+                            }
+                        },
                 )
             }
 
@@ -204,14 +208,15 @@ fun NuevaTareaModal(
                         color = DayteskColors.TextSecondary,
                         modifier = Modifier.padding(bottom = DayteskSpacing.sm),
                     )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.sm),
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.md),
+                        verticalArrangement = Arrangement.spacedBy(DayteskSpacing.md),
                     ) {
                         contextos.forEach { ctx ->
                             val isSelected = ctx.id == selectedContextoId
                             Box(
                                 modifier = Modifier
-                                    .height(32.dp)
+                                    .height(40.dp)
                                     .clip(RoundedCornerShape(50))
                                     .background(
                                         if (isSelected) ctx.colorLight()
@@ -222,13 +227,30 @@ fun NuevaTareaModal(
                                         else Modifier
                                     )
                                     .clickable { selectedContextoId = ctx.id }
-                                    .padding(horizontal = 14.dp),
+                                    .padding(horizontal = DayteskSpacing.xl),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = ctx.label(),
-                                    style = DayteskTypography.bodySm,
+                                    style = DayteskTypography.bodyMd,
                                     color = if (isSelected) ctx.color() else DayteskColors.TextSecondary,
+                                )
+                            }
+                        }
+                        if (canAddContexto && onAddContexto != null) {
+                            Box(
+                                modifier = Modifier
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(DayteskColors.PrimaryLight)
+                                    .clickable { onAddContexto() }
+                                    .padding(horizontal = DayteskSpacing.xl),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "+",
+                                    style = DayteskTypography.h3,
+                                    color = DayteskColors.Primary,
                                 )
                             }
                         }
@@ -242,7 +264,7 @@ fun NuevaTareaModal(
                             imageVector = Icons.Default.DateRange,
                             contentDescription = "Fecha",
                             tint = DayteskColors.TextDisabled,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(DayteskSpacing.xl),
                         )
                     },
                     label = "Fecha",
@@ -264,12 +286,15 @@ fun NuevaTareaModal(
                         color = DayteskColors.TextSecondary,
                     )
                     Spacer(modifier = Modifier.weight(1f))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(DayteskSpacing.sm),
+                    ) {
                         Prioridad.entries.forEach { p ->
                             val isSelected = p == selectedPrioridad
                             Box(
                                 modifier = Modifier
-                                    .height(28.dp)
+                                    .height(40.dp)
                                     .clip(RoundedCornerShape(50))
                                     .background(
                                         if (isSelected) p.colorLight()
@@ -280,63 +305,18 @@ fun NuevaTareaModal(
                                         else Modifier
                                     )
                                     .clickable { selectedPrioridad = p }
-                                    .padding(horizontal = 10.dp),
+                                    .padding(horizontal = DayteskSpacing.lg),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
                                     text = p.label(),
-                                    style = DayteskTypography.tiny,
+                                    style = DayteskTypography.bodySm,
                                     color = if (isSelected) p.color() else DayteskColors.TextSecondary,
                                 )
                             }
                         }
                     }
                 }
-
-                // Reminder toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Recordatorio",
-                        tint = DayteskColors.TextDisabled,
-                        modifier = Modifier.size(20.dp),
-                    )
-                    Spacer(modifier = Modifier.width(DayteskSpacing.sm))
-                    Text(
-                        text = "Recordatorio",
-                        style = DayteskTypography.bodySm,
-                        color = DayteskColors.TextSecondary,
-                    )
-                    Spacer(modifier = Modifier.weight(1f))
-                    Switch(
-                        checked = reminderOn,
-                        onCheckedChange = { reminderOn = it },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = DayteskColors.Primary,
-                            uncheckedThumbColor = Color.White,
-                            uncheckedTrackColor = DayteskColors.Border,
-                        ),
-                    )
-                }
-
-                // Repeat row
-                FormRow(
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Repetir",
-                            tint = DayteskColors.TextDisabled,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    },
-                    label = "Repetir",
-                    value = "No repetir",
-                    showChevron = true,
-                )
 
                 Spacer(modifier = Modifier.height(DayteskSpacing.sm))
             }
@@ -361,14 +341,19 @@ fun NuevaTareaModal(
 
     // ── Date picker dialog ─────────────────────────────
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState()
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = System.currentTimeMillis(),
+        )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = {
-                    pendingDateMillis = datePickerState.selectedDateMillis
+                    val selected = datePickerState.selectedDateMillis
                     showDatePicker = false
-                    showTimePicker = true
+                    if (selected != null) {
+                        pendingDateMillis = selected
+                        showTimePicker = true
+                    }
                 }) {
                     Text("OK")
                 }
@@ -385,7 +370,11 @@ fun NuevaTareaModal(
 
     // ── Time picker dialog (M3 has no TimePickerDialog; wrap manually) ─
     if (showTimePicker && pendingDateMillis != null) {
-        val timeState = rememberTimePickerState(initialHour = 12, initialMinute = 0)
+        val now = remember { Calendar.getInstance() }
+        val timeState = rememberTimePickerState(
+            initialHour = now.get(Calendar.HOUR_OF_DAY),
+            initialMinute = now.get(Calendar.MINUTE),
+        )
         Dialog(
             onDismissRequest = {
                 showTimePicker = false
@@ -393,10 +382,10 @@ fun NuevaTareaModal(
             },
         ) {
             Surface(
-                shape = RoundedCornerShape(12.dp),
+                shape = DayteskShapes.small,
                 color = DayteskColors.Surface,
             ) {
-                Column(Modifier.padding(16.dp)) {
+                Column(Modifier.padding(DayteskSpacing.lg)) {
                     TimePicker(state = timeState)
                     Row(
                         Modifier.fillMaxWidth(),
@@ -409,8 +398,13 @@ fun NuevaTareaModal(
                             Text("Cancelar")
                         }
                         TextButton(onClick = {
-                            val cal = Calendar.getInstance().apply {
+                            val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
                                 timeInMillis = pendingDateMillis!!
+                            }
+                            val cal = Calendar.getInstance().apply {
+                                set(Calendar.YEAR, utc.get(Calendar.YEAR))
+                                set(Calendar.MONTH, utc.get(Calendar.MONTH))
+                                set(Calendar.DAY_OF_MONTH, utc.get(Calendar.DAY_OF_MONTH))
                                 set(Calendar.HOUR_OF_DAY, timeState.hour)
                                 set(Calendar.MINUTE, timeState.minute)
                                 set(Calendar.SECOND, 0)
@@ -441,7 +435,7 @@ private fun TextFieldThemed(
     maxLength: Int? = null,
     supportingText: (@Composable () -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(12.dp)
+    val shape = DayteskShapes.small
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -450,33 +444,31 @@ private fun TextFieldThemed(
                 .clip(shape)
                 .background(DayteskColors.Surface)
                 .border(1.dp, DayteskColors.Border, shape)
-                .padding(horizontal = 14.dp, vertical = if (singleLine) 14.dp else 10.dp),
+                .padding(horizontal = DayteskSpacing.lg, vertical = DayteskSpacing.md),
         ) {
-            androidx.compose.material3.OutlinedTextField(
+            BasicTextField(
                 value = value,
                 onValueChange = { newValue ->
                     val clamped = if (maxLength != null) newValue.take(maxLength) else newValue
                     onValueChange(clamped)
                 },
-                placeholder = {
-                    Text(
-                        text = placeholder,
-                        style = DayteskTypography.bodyMd,
-                        color = DayteskColors.TextDisabled,
-                    )
-                },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = singleLine,
                 textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Next),
-                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color.Transparent,
-                    unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    cursorColor = DayteskColors.Primary,
-                ),
-                shape = shape,
+                cursorBrush = SolidColor(DayteskColors.Primary),
+                decorationBox = { innerTextField ->
+                    Box {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                style = DayteskTypography.bodyMd,
+                                color = DayteskColors.TextDisabled,
+                            )
+                        }
+                        innerTextField()
+                    }
+                },
             )
         }
         if (supportingText != null) {
@@ -514,7 +506,7 @@ private fun FormRow(
             color = DayteskColors.TextDisabled,
         )
         if (showChevron) {
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(DayteskSpacing.xxs))
             Text(
                 text = "›",
                 fontSize = 18.sp,
@@ -533,7 +525,7 @@ private fun PillButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
+            .height(DayteskSpacing.xxxxl)
             .clip(DayteskShapes.pill)
             .background(if (enabled) DayteskColors.Primary else DayteskColors.PrimaryLight)
             .clickable(enabled) { onClick() },

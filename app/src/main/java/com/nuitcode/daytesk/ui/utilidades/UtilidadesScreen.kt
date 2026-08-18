@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nuitcode.daytesk.Historial
 import com.nuitcode.daytesk.ImageOcr
 import com.nuitcode.daytesk.AudioTranscribe
 import com.nuitcode.daytesk.VideoTranscribe
@@ -84,15 +85,15 @@ private val tools = listOf(
     ),
     ToolItem(
         title = "Transcribir audio",
-        description = "Audio a texto",
+        description = "Solo archivos de audio",
         containerColor = Color(0xFFF3EEFF),
         iconColor = Color(0xFFD4B8FD),
         kind = ToolKind.AUDIO,
         route = AudioTranscribe,
     ),
     ToolItem(
-        title = "Video a texto/audio",
-        description = "Extraer texto o audio",
+        title = "Transcribir video",
+        description = "Solo archivos de video",
         containerColor = DayteskColors.UrgentLight,
         iconColor = DayteskColors.Urgent,
         kind = ToolKind.VIDEO,
@@ -138,7 +139,17 @@ fun UtilidadesScreen(
                 )
             }
             item {
-                PlaceholderCard()
+                ToolCard(
+                    tool = ToolItem(
+                        title = "Historial",
+                        description = "Tareas completadas",
+                        containerColor = DayteskColors.SuccessLight,
+                        iconColor = DayteskColors.Success,
+                        kind = ToolKind.IMAGE,
+                        route = Historial,
+                    ),
+                    onClick = { onNavigate(Historial) },
+                )
             }
         }
     }

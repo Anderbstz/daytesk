@@ -48,6 +48,7 @@ object MockData {
         contextoId = 1L, // casa
         contexto = Contexto.DEFAULTS[0],
         estado = TareaEstado.COMPLETADA,
+        fechaCompletada = now,
         orden = 2,
     )
 
@@ -68,8 +69,8 @@ object MockData {
         titulo = "Leer un libro",
         descripcion = "Terminar 'El poder del hábito'",
         prioridad = Prioridad.BAJA,
-        contextoId = 3L, // personal
-        contexto = Contexto.DEFAULTS[2],
+        contextoId = Contexto.FALLBACK_ID,
+        contexto = Contexto.FALLBACK,
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + 7 * dayMs,
         orden = 4,
@@ -80,8 +81,8 @@ object MockData {
         titulo = "Comprar regalo cumpleaños",
         descripcion = "Regalo para mamá",
         prioridad = Prioridad.MEDIA,
-        contextoId = 3L, // personal
-        contexto = Contexto.DEFAULTS[2],
+        contextoId = Contexto.FALLBACK_ID,
+        contexto = Contexto.FALLBACK,
         estado = TareaEstado.PENDIENTE,
         fechaVencimiento = now + 5 * dayMs,
         orden = 5,

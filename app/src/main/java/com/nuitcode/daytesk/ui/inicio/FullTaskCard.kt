@@ -76,7 +76,7 @@ fun FullTaskCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp)
             .then(cardBorder)
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
@@ -96,7 +96,7 @@ fun FullTaskCard(
                 // Priority dot
                 Box(
                     modifier = Modifier
-                        .size(10.dp)
+                        .size(12.dp)
                         .background(tarea.prioridad.color(), CircleShape),
                 )
 

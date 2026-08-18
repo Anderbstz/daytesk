@@ -9,8 +9,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -24,23 +22,20 @@ import com.nuitcode.daytesk.theme.DayteskTypography
  */
 @Composable
 fun ContextChip(contexto: Contexto) {
-    val backgroundColor = contexto.color().copy(alpha = 0.2f)
-    val textColor = if (contexto.color().luminance() > 0.5f) Color.Black else Color.White
-
     Box(
         modifier = Modifier
-            .height(26.dp)
+            .height(32.dp)
             .background(
-                color = backgroundColor,
+                color = contexto.colorLight(),
                 shape = RoundedCornerShape(50),
             )
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = contexto.label(),
-            style = DayteskTypography.badge,
-            color = textColor,
+            style = DayteskTypography.label,
+            color = contexto.color(),
         )
     }
 }

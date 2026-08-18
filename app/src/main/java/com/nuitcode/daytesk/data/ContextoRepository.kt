@@ -27,9 +27,13 @@ interface ContextoRepository {
 class ContextoInUseException(val count: Int) :
     Exception("Contexto en uso por $count tarea(s)")
 
-/** Thrown when a delete is refused because the context is one of the 4 seeds. */
-class DefaultContextProtectedException :
-    Exception("No se puede eliminar un contexto predeterminado")
+/** Thrown when adding would exceed [Contexto.MAX_COUNT]. */
+class ContextoLimitException :
+    Exception("Podés tener como máximo ${Contexto.MAX_COUNT} contextos")
+
+/** Thrown when the last remaining context would be deleted. */
+class LastContextoException :
+    Exception("Tenés que dejar al menos un contexto")
 
 /** Thrown when an insert/update collides with an existing `nombre` (case-insensitive). */
 class DuplicateContextoNameException(val nombre: String) :
@@ -53,8 +57,9 @@ class DefaultContextoRepository(
     override suspend fun add(contexto: Contexto): Result<Long> {
         val nombre = contexto.nombre.trim()
         if (nombre.isBlank()) return Result.failure(BlankContextoNameException())
-        if (collidesWithDefault(nombre)) {
-            return Result.failure(DuplicateContextoNameException(nombre))
+        val existing = contextoDao.getAllFlow().first()
+        if (existing.size >= Contexto.MAX_COUNT) {
+            return Result.failure(ContextoLimitException())
         }
         return try {
             // Assign id 0 — Room auto-generates. orden defaults to
@@ -104,15 +109,14 @@ class DefaultContextoRepository(
     override suspend fun delete(id: Long): Result<Unit> {
         val entity = contextoDao.getById(id)
             ?: return Result.failure(IllegalStateException("Contexto $id no existe"))
-        return when (val sentinel = contextoDao.deleteIfUnreferenced(entity)) {
-            -1 -> Result.failure(DefaultContextProtectedException())
-            0 -> Result.success(Unit)
-            else -> Result.failure(ContextoInUseException(sentinel))
+        val all = contextoDao.getAllFlow().first()
+        if (all.size <= 1) return Result.failure(LastContextoException())
+        val replacement = all.first { it.id != id }
+        val inUse = contextoDao.countTareasForContext(id)
+        if (inUse > 0) {
+            contextoDao.reassignTareas(id, replacement.id)
         }
-    }
-
-    private fun collidesWithDefault(nombre: String): Boolean {
-        val normalized = nombre.lowercase()
-        return Contexto.DEFAULTS.any { it.nombre.equals(normalized, ignoreCase = true) }
+        contextoDao.delete(entity)
+        return Result.success(Unit)
     }
 }

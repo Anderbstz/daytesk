@@ -4,19 +4,16 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
+import com.nuitcode.daytesk.utilities.common.MediaKind
+import com.nuitcode.daytesk.utilities.common.VoskTranscriber
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 
 sealed interface AudioTranscribeState {
@@ -46,7 +43,7 @@ class AudioTranscribeViewModel(
     private val coroutineScope: CoroutineScope? = null,
 ) : ViewModel() {
     constructor(context: Context) : this(
-        WorkManagerAudioTranscribeScheduler(WorkManager.getInstance(context)),
+        InProcessAudioTranscribeScheduler(context.applicationContext),
     )
 
     val state = MutableStateFlow<AudioTranscribeState>(AudioTranscribeState.Idle)
@@ -92,66 +89,26 @@ class AudioTranscribeViewModel(
     }
 }
 
-private class WorkManagerAudioTranscribeScheduler(
-    private val workManager: WorkManager,
+/**
+ * Transcribes in the app process. The picker's read grant does not survive into
+ * a background worker, so recognition happens while the screen is open.
+ */
+private class InProcessAudioTranscribeScheduler(
+    private val context: Context,
 ) : AudioTranscribeWorkScheduler {
 
-    override suspend fun preflight(): AudioTranscribePreflight {
-        // The pre-flight probe used to construct an ML Kit on-device recognizer
-        // and catch ERROR_CANNOT_CHECK_MODEL / ERROR_MISSING_DATA. With the
-        // switch to the built-in android.speech.SpeechRecognizer the
-        // availability check happens at the screen level where the recognizer
-        // is constructed. The screen surfaces a clear "Reconocimiento de voz no
-        // disponible" message via RecognitionListener#onError if the device has
-        // no speech service installed.
-        return AudioTranscribePreflight.Ready
-    }
+    override suspend fun preflight(): AudioTranscribePreflight = AudioTranscribePreflight.Ready
 
-    override fun enqueue(uri: Uri): Flow<AudioTranscribeWorkResult> = callbackFlow {
-        val request = OneTimeWorkRequestBuilder<AudioTranscribeWorker>()
-            .setInputData(Data.Builder().putString(AudioTranscribeWorker.INPUT_URI, uri.toString()).build())
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build(),
+    override fun enqueue(uri: Uri): Flow<AudioTranscribeWorkResult> = flow {
+        val result = try {
+            AudioTranscribeWorkResult.Completed(
+                VoskTranscriber.transcribe(context, uri, MediaKind.AUDIO),
             )
-            .build()
-
-        val observer = launch {
-            workManager.getWorkInfoByIdFlow(request.id).collectLatest { info ->
-                when (info?.state) {
-                    WorkInfo.State.SUCCEEDED -> {
-                        trySend(
-                            AudioTranscribeWorkResult.Completed(
-                                info.outputData.getString(AudioTranscribeWorker.OUTPUT_TEXT).orEmpty(),
-                            ),
-                        )
-                        close()
-                    }
-
-                    WorkInfo.State.FAILED -> {
-                        trySend(
-                            AudioTranscribeWorkResult.Failed(
-                                info.outputData.getString(AudioTranscribeWorker.OUTPUT_ERROR)
-                                    ?: "No se pudo transcribir el audio.",
-                            ),
-                        )
-                        close()
-                    }
-
-                    WorkInfo.State.CANCELLED -> {
-                        trySend(AudioTranscribeWorkResult.Failed("Transcripción cancelada."))
-                        close()
-                    }
-
-                    else -> Unit
-                }
-            }
+        } catch (failure: Throwable) {
+            AudioTranscribeWorkResult.Failed(
+                failure.message?.takeIf { it.isNotBlank() } ?: "No se pudo transcribir el audio.",
+            )
         }
-        workManager.enqueue(request)
-        awaitClose {
-            observer.cancel()
-            workManager.cancelWorkById(request.id)
-        }
-    }
+        emit(result)
+    }.flowOn(Dispatchers.IO)
 }

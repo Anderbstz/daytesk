@@ -53,10 +53,12 @@ data class Contexto(
             Contexto(id = 4, nombre = "salud", color = 0xFFB2E87A.toInt()),
         )
 
-        /**
-         * 8-color palette surfaced by the Add/Edit context modal. Single-select
-         * (the modal picks exactly one).
-         */
+        /** Seed used when a FK cannot be resolved. Matches the v1→v2 migration default. */
+        const val FALLBACK_ID: Long = 3L
+        val FALLBACK: Contexto = DEFAULTS.first { it.id == FALLBACK_ID }
+
+        const val MAX_COUNT: Int = 8
+
         val PALETTE: List<Int> = listOf(
             0xFFEF5350.toInt(),
             0xFFAB47BC.toInt(),

@@ -2,13 +2,13 @@ package com.nuitcode.daytesk.ui.inicio
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.theme.DayteskColors
+import com.nuitcode.daytesk.theme.DayteskElevation
 import com.nuitcode.daytesk.theme.DayteskTypography
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -33,7 +34,7 @@ fun CompactTaskCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = 20.dp, vertical = 6.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = DayteskColors.Surface),
@@ -42,32 +43,24 @@ fun CompactTaskCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Priority dot
             Box(
                 modifier = Modifier
-                    .size(8.dp)
+                    .size(12.dp)
                     .background(tarea.prioridad.color(), CircleShape),
             )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Context chip
             ContextChip(contexto = tarea.contexto)
-
-            // Time
+            Spacer(modifier = Modifier.weight(1f))
             if (tarea.fechaVencimiento != null) {
-                Spacer(modifier = Modifier.weight(1f))
-                val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+                val dateFormat = SimpleDateFormat("d MMM", Locale.forLanguageTag("es-ES"))
                 Text(
-                    text = timeFormat.format(Date(tarea.fechaVencimiento)),
+                    text = dateFormat.format(Date(tarea.fechaVencimiento)),
                     style = DayteskTypography.caption,
                     color = DayteskColors.TextSecondary,
                 )
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
             }
         }
 
@@ -75,11 +68,7 @@ fun CompactTaskCard(
             text = tarea.titulo,
             style = DayteskTypography.bodyMd,
             color = DayteskColors.TextPrimary,
-            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
         )
     }
-}
-
-private object DayteskElevation {
-    val card = 2.dp
 }

@@ -72,7 +72,7 @@ fun ContextEditModal(
     onSave: (nombre: String, color: Int) -> Unit,
 ) {
     val isEdit = initial != null
-    val lockedColor = isEdit && initial.isDefault()
+    val lockedColor = false
 
     var nombre by remember { mutableStateOf(initial?.nombre ?: "") }
     var selectedColor by remember { mutableStateOf(initial?.color ?: Contexto.PALETTE.first()) }

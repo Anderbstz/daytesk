@@ -29,4 +29,6 @@ data class DayteskData(
      */
     val contextos: List<Contexto> = emptyList(),
     val weeklyReview: List<String> = emptyList(),
+    val otrasPendientes: List<Tarea> = emptyList(),
+    val vencidas: List<Tarea> = emptyList(),
 )

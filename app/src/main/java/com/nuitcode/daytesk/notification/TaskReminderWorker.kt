@@ -16,6 +16,11 @@ class TaskReminderWorker(
 
         if (taskId == -1L) return Result.failure()
 
+        if (taskId == 0L) {
+            NotificationHelper.showTaskReminder(applicationContext, taskTitle, taskId)
+            return Result.success()
+        }
+
         val database = AppDatabase.getInstance(applicationContext)
         val tarea = database.tareaDao().getTareaById(taskId)
 

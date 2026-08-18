@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nuitcode.daytesk.model.DayteskUser
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskTypography
 import java.util.Calendar
@@ -38,7 +39,7 @@ private fun getGreeting(): String {
 }
 
 @Composable
-fun InicioTopBar() {
+fun InicioTopBar(points: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -53,7 +54,7 @@ fun InicioTopBar() {
                 color = DayteskColors.TextSecondary,
             )
             Text(
-                text = "Andrés",
+                text = DayteskUser.displayName,
                 style = DayteskTypography.display,
                 color = DayteskColors.TextPrimary,
             )
@@ -70,7 +71,7 @@ fun InicioTopBar() {
             )
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-                text = "12",
+                text = points.toString(),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = DayteskColors.Warning,
@@ -88,7 +89,7 @@ fun InicioTopBar() {
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "AN",
+                    text = DayteskUser.initials,
                     color = Color.White,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,

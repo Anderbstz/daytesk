@@ -1,6 +1,10 @@
 package com.nuitcode.daytesk.utilities.audio
 
 import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Button
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -89,7 +93,20 @@ fun AudioTranscribeScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             NetworkDisclosure()
-            Text("Tocá el micrófono y hablá. Solicitamos permiso de grabación la primera vez.")
+            Text("Elegí un archivo de audio (mp3, m4a, wav) o grabá con el micrófono.")
+
+            val audioPicker = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.OpenDocument(),
+            ) { uri: Uri? ->
+                uri?.let { viewModel.recognize(it) }
+            }
+            Button(
+                onClick = { audioPicker.launch(arrayOf("audio/*")) },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state !is AudioTranscribeState.Loading,
+            ) {
+                Text("Seleccionar audio")
+            }
 
             PermissionGate(
                 permissions = listOf("android.permission.RECORD_AUDIO"),

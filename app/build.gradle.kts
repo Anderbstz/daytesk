@@ -37,6 +37,9 @@ android {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
       }
+      jniLibs {
+        useLegacyPackaging = true
+      }
     }
 }
 
@@ -94,6 +97,7 @@ dependencies {
   // in Google's Maven repo. Audio/video transcription now uses the built-in
   // android.speech.SpeechRecognizer (live mic only).
   implementation(libs.kotlinx.coroutines.play.services)
+  implementation("com.alphacephei:vosk-android:0.3.47")
 
   // JVM Android test support
   testImplementation(libs.androidx.test.core)

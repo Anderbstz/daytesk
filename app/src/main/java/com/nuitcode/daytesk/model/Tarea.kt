@@ -6,9 +6,9 @@ data class Tarea(
     val descripcion: String = "",
     val prioridad: Prioridad = Prioridad.MEDIA,
     /**
-     * FK into the `contextos` table. Stable id 3 = PERSONAL default.
+     * FK into the `contextos` table. Defaults to [Contexto.FALLBACK_ID].
      */
-    val contextoId: Long = 3L,
+    val contextoId: Long = Contexto.FALLBACK_ID,
     /**
      * Resolved `Contexto` for this `Tarea`. Populated by
      * `DefaultDataRepository.data` from the 3-way combine (tareas + inbox +
@@ -16,10 +16,11 @@ data class Tarea(
      * built `Tarea` instances carry a sensible value before the repository
      * resolves the FK.
      */
-    val contexto: Contexto = Contexto.DEFAULTS[2],
+    val contexto: Contexto = Contexto.FALLBACK,
     val estado: TareaEstado = TareaEstado.PENDIENTE,
     val fechaCreacion: Long = System.currentTimeMillis(),
     val fechaVencimiento: Long? = null,
+    val fechaCompletada: Long? = null,
     val orden: Int = 0,
 ) {
     companion object {

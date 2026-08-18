@@ -79,14 +79,25 @@ fun TareasScreen(
 ) {
     var selectedFilter by remember { mutableStateOf<Long?>(null) }
     var checkedTasks by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var searchQuery by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
+    var sortByPriority by remember { mutableStateOf(false) }
 
-    val hoyFiltered = data.tareasHoy.filter {
-        selectedFilter == null || it.contextoId == selectedFilter
+    fun matches(tarea: Tarea): Boolean {
+        val byContext = selectedFilter == null || tarea.contextoId == selectedFilter
+        val bySearch = searchQuery.isBlank() ||
+            tarea.titulo.contains(searchQuery, ignoreCase = true) ||
+            tarea.descripcion.contains(searchQuery, ignoreCase = true)
+        return byContext && bySearch
     }
-    val semanaFiltered = data.tareasSemana.filter {
-        selectedFilter == null || it.contextoId == selectedFilter
-    }
-    val hasResults = hoyFiltered.isNotEmpty() || semanaFiltered.isNotEmpty()
+
+    fun List<Tarea>.sortedVisible(): List<Tarea> =
+        if (sortByPriority) sortedByDescending { it.prioridad.ordinal } else this
+
+    val hoyFiltered = data.tareasHoy.filter(::matches).sortedVisible()
+    val semanaFiltered = data.tareasSemana.filter(::matches).sortedVisible()
+    val otrasFiltered = data.otrasPendientes.filter(::matches).sortedVisible()
+    val hasResults = hoyFiltered.isNotEmpty() || semanaFiltered.isNotEmpty() || otrasFiltered.isNotEmpty()
 
     Column(
         modifier = Modifier
@@ -94,7 +105,14 @@ fun TareasScreen(
             .background(DayteskColors.Background)
             .verticalScroll(rememberScrollState()),
     ) {
-        TareasTopBar()
+        TareasTopBar(
+            showSearch = showSearch,
+            searchQuery = searchQuery,
+            onSearchQueryChange = { searchQuery = it },
+            onToggleSearch = { showSearch = !showSearch },
+            sortByPriority = sortByPriority,
+            onToggleSort = { sortByPriority = !sortByPriority },
+        )
 
         FilterChipsRow(
             selectedFilter = selectedFilter,
@@ -161,6 +179,35 @@ fun TareasScreen(
                 }
             }
 
+            if (otrasFiltered.isNotEmpty()) {
+                SectionLabel(
+                    title = "Otras",
+                    count = otrasFiltered.size,
+                    topPadding = 8.dp,
+                )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    otrasFiltered.forEach { tarea ->
+                        val isChecked =
+                            tarea.id in checkedTasks || tarea.estado == TareaEstado.COMPLETADA
+                        TareasTaskCard(
+                            tarea = tarea,
+                            isChecked = isChecked,
+                            onToggle = { checked ->
+                                onTaskToggle(tarea.id, checked)
+                                checkedTasks = if (checked) checkedTasks + tarea.id
+                                else checkedTasks - tarea.id
+                            },
+                            onClick = { onTaskClick(tarea.id) },
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
         }
     }
@@ -169,34 +216,59 @@ fun TareasScreen(
 // ── Top bar ───────────────────────────────────────────────────
 
 @Composable
-private fun TareasTopBar() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 20.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Tareas",
-            style = DayteskTypography.display,
-            color = DayteskColors.TextPrimary,
-        )
+private fun TareasTopBar(
+    showSearch: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+    sortByPriority: Boolean,
+    onToggleSort: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Buscar",
-                tint = DayteskColors.TextDisabled,
-                modifier = Modifier.size(22.dp),
+            Text(
+                text = "Tareas",
+                style = DayteskTypography.display,
+                color = DayteskColors.TextPrimary,
             )
-            Icon(
-                imageVector = Icons.Default.Menu,
-                contentDescription = "Filtrar",
-                tint = DayteskColors.TextDisabled,
-                modifier = Modifier.size(22.dp),
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Buscar",
+                    tint = if (showSearch) DayteskColors.Primary else DayteskColors.TextDisabled,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clickable { onToggleSearch() },
+                )
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = if (sortByPriority) "Ordenar por fecha" else "Ordenar por prioridad",
+                    tint = if (sortByPriority) DayteskColors.Primary else DayteskColors.TextDisabled,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .clickable { onToggleSort() },
+                )
+            }
+        }
+        if (showSearch) {
+            androidx.compose.material3.OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 12.dp),
+                placeholder = { Text("Buscar tareas") },
+                singleLine = true,
             )
         }
     }
@@ -328,7 +400,7 @@ private fun TareasTaskCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(10.dp)
+                        .size(12.dp)
                         .background(tarea.prioridad.color(), CircleShape),
                 )
 

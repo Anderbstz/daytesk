@@ -63,13 +63,12 @@ import kotlinx.coroutines.launch
  *
  *  - the FAB → add flow (`ContextEditModal(initial = null)`)
  *  - the row tap → edit flow (`ContextEditModal(initial = contexto)`)
- *  - the row long-press → delete confirm (`AlertDialog`, hidden for defaults)
+ *  - the row long-press → delete confirm (`AlertDialog`, including defaults)
  *  - empty-state placeholder when the list has zero items
  *
  * The screen is read-only over [ContextoRepository.contextos] via
  * `collectAsStateWithLifecycle`; writes go through `add` / `update` /
- * `delete`. Default-context deletion is gated in the UI (`onLongPress`
- * is only armed when `!contexto.isDefault()`).
+ * `delete`. You can have at most [Contexto.MAX_COUNT] contexts.
  */
 @Composable
 fun ContextosScreen(
@@ -96,17 +95,19 @@ fun ContextosScreen(
             ContextosTopBar(onBack = onBack)
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAdd = true },
-                containerColor = DayteskColors.Primary,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.semantics { testTag = "contextos_fab_add" },
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Agregar contexto",
-                )
+            if (contextos.size < Contexto.MAX_COUNT) {
+                FloatingActionButton(
+                    onClick = { showAdd = true },
+                    containerColor = DayteskColors.Primary,
+                    contentColor = Color.White,
+                    shape = CircleShape,
+                    modifier = Modifier.semantics { testTag = "contextos_fab_add" },
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Agregar contexto",
+                    )
+                }
             }
         },
     ) { padding ->
@@ -124,9 +125,7 @@ fun ContextosScreen(
                     ContextoRow(
                         contexto = contexto,
                         onClick = { editing = contexto },
-                        onLongPress = {
-                            if (!contexto.isDefault()) deleting = contexto
-                        },
+                        onLongPress = { deleting = contexto },
                     )
                 }
             }
@@ -184,7 +183,7 @@ fun ContextosScreen(
             },
             text = {
                 Text(
-                    text = "Vas a eliminar \"@${current.nombre}\". Esta acción no se puede deshacer.",
+                    text = "Vas a eliminar \"@${current.nombre}\". Las tareas de este contexto pasan a otro. Esta acción no se puede deshacer.",
                     style = DayteskTypography.bodySm,
                     color = DayteskColors.TextSecondary,
                 )

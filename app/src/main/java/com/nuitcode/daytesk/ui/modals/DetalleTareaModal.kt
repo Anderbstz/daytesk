@@ -8,16 +8,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,9 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,7 +35,6 @@ import androidx.compose.ui.unit.sp
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.theme.DayteskColors
-import com.nuitcode.daytesk.theme.DayteskElevation
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -79,31 +72,27 @@ fun DetalleTareaModal(
                 .clickable(enabled = false) { } // consume clicks
         ) {
             // ── Top bar ─────────────────────────────────────
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = DayteskSpacing.xl, vertical = DayteskSpacing.xl),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Volver",
                     tint = DayteskColors.TextDisabled,
                     modifier = Modifier
-                        .size(24.dp)
+                        .align(Alignment.CenterStart)
+                        .size(DayteskSpacing.xxl)
                         .clickable { onDismiss() },
                 )
                 Text(
                     text = "Detalle",
                     style = DayteskTypography.h1,
                     color = DayteskColors.TextPrimary,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = DayteskSpacing.sm),
+                    modifier = Modifier.align(Alignment.Center),
                     textAlign = TextAlign.Center,
                 )
-                // Edit — not wired yet
-                Spacer(modifier = Modifier.size(20.dp))
             }
 
             Column(
@@ -139,7 +128,7 @@ fun DetalleTareaModal(
                             Box(
                                 modifier = Modifier
                                     .background(DayteskColors.WarningLight, RoundedCornerShape(50))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                                    .padding(horizontal = DayteskSpacing.sm, vertical = 2.dp),
                             ) {
                                 Text(
                                     text = tarea.estado.label(),
@@ -164,7 +153,7 @@ fun DetalleTareaModal(
                             text = tarea.descripcion,
                             style = DayteskTypography.bodyMd,
                             color = DayteskColors.TextSecondary,
-                            modifier = Modifier.padding(top = 6.dp),
+                            modifier = Modifier.padding(top = DayteskSpacing.xxs),
                         )
                     }
                 }
@@ -174,7 +163,7 @@ fun DetalleTareaModal(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = DayteskSpacing.xl, vertical = DayteskSpacing.xl),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(DayteskSpacing.xxs),
                 ) {
                     // Due date
                     DetailRow(
@@ -183,7 +172,7 @@ fun DetalleTareaModal(
                                 imageVector = Icons.Default.DateRange,
                                 contentDescription = "Vence",
                                 tint = DayteskColors.TextDisabled,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(DayteskSpacing.xl),
                             )
                         },
                         label = "Vence",
@@ -211,10 +200,10 @@ fun DetalleTareaModal(
                         customValue = {
                             Box(
                                 modifier = Modifier
-                                    .height(26.dp)
+                                    .height(DayteskSpacing.xxl)
                                     .clip(RoundedCornerShape(50))
                                     .background(tarea.prioridad.colorLight())
-                                    .padding(horizontal = 10.dp),
+                                    .padding(horizontal = DayteskSpacing.md),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -235,19 +224,6 @@ fun DetalleTareaModal(
                         value = formatTimestamp(tarea.fechaCreacion),
                     )
 
-                    // Reminder
-                    DetailRow(
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = "Recordatorio",
-                                tint = DayteskColors.TextDisabled,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        },
-                        label = "Recordatorio",
-                        value = "15 min antes",
-                    )
                 }
 
                 // ── Action buttons ──────────────────────────
@@ -255,13 +231,13 @@ fun DetalleTareaModal(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = DayteskSpacing.xl),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(DayteskSpacing.md),
                 ) {
                     // Completar
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(DayteskSpacing.xxxxl)
                             .clip(DayteskShapes.pill)
                             .background(DayteskColors.Success)
                             .clickable { onComplete() },
@@ -280,7 +256,7 @@ fun DetalleTareaModal(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(DayteskSpacing.xxxxl)
                             .clip(DayteskShapes.pill)
                             .background(DayteskColors.Surface)
                             .border(1.5.dp, DayteskColors.Urgent, DayteskShapes.pill)
@@ -297,56 +273,7 @@ fun DetalleTareaModal(
                     }
                 }
 
-                // ── Notes section ───────────────────────────
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = DayteskSpacing.xl, vertical = DayteskSpacing.xl),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = "Notas",
-                            style = DayteskTypography.h3,
-                            color = DayteskColors.TextPrimary,
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Agregar nota",
-                            tint = DayteskColors.Primary,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .clickable { /* TODO: add note */ },
-                        )
-                    }
-
-                    // Demo note card
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 10.dp)
-                            .clip(DayteskShapes.small)
-                            .background(Color(0xFFF7F8FC))
-                            .padding(12.dp),
-                    ) {
-                        Text(
-                            text = "Recordar incluir gráficos de la práctica anterior como referencia.",
-                            style = DayteskTypography.bodySm,
-                            color = DayteskColors.TextPrimary,
-                        )
-                        Text(
-                            text = "Ayer · 4:32 pm",
-                            style = DayteskTypography.caption,
-                            color = DayteskColors.TextDisabled,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(DayteskSpacing.xl))
             }
         }
     }
@@ -400,9 +327,14 @@ private fun venceHoy(millis: Long?): Boolean {
 
 private fun formatFechaVencimiento(millis: Long?): String {
     if (millis == null) return "Sin fecha"
-    if (venceHoy(millis)) return "hoy · 11:59 pm"
-    val fmt = SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag("es-ES"))
-    return fmt.format(Date(millis))
+    val locale = Locale.forLanguageTag("es-ES")
+    val date = Date(millis)
+    if (venceHoy(millis)) {
+        val timeFmt = SimpleDateFormat("h:mm a", locale)
+        return "hoy · ${timeFmt.format(date)}"
+    }
+    val fmt = SimpleDateFormat("d MMM yyyy, HH:mm", locale)
+    return fmt.format(date)
 }
 
 private fun formatTimestamp(millis: Long): String {

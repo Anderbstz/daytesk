@@ -1,9 +1,26 @@
 package com.nuitcode.daytesk.ui.inbox
 
+import android.Manifest
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.graphics.SolidColor
+import com.nuitcode.daytesk.utilities.common.PermissionGate
+import com.nuitcode.daytesk.utilities.common.PermissionRationale
+import java.util.Locale as JavaLocale
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +66,7 @@ fun InboxScreen(
     data: DayteskData,
     onItemClick: (Long) -> Unit = {},
     onProcessAll: () -> Unit = {},
+    onAddItem: (String) -> Unit = {},
 ) {
     Column(
         modifier = Modifier
@@ -60,7 +78,7 @@ fun InboxScreen(
             count = data.inbox.size,
             onProcessAll = onProcessAll,
         )
-        QuickCaptureBar()
+        QuickCaptureBar(onAddItem = onAddItem)
         InboxList(
             items = data.inbox,
             onItemClick = onItemClick,
@@ -113,41 +131,100 @@ private fun InboxTopBar(
 }
 
 @Composable
-private fun QuickCaptureBar() {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .shadow(2.dp, RoundedCornerShape(12.dp))
-            .background(Color.White, RoundedCornerShape(12.dp))
-            .border(1.dp, DayteskColors.Border, RoundedCornerShape(12.dp))
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(20.dp)
-                .border(1.5.dp, DayteskColors.TextDisabled, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Agregar",
-                tint = DayteskColors.TextDisabled,
-                modifier = Modifier.size(14.dp),
-            )
+private fun QuickCaptureBar(onAddItem: (String) -> Unit) {
+    var draft by remember { mutableStateOf("") }
+    val speechLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val spoken = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.trim()
+        if (!spoken.isNullOrBlank()) {
+            onAddItem(spoken)
         }
-        Text(
-            text = "Agregar tarea rápida...",
-            style = DayteskTypography.bodySm,
-            color = DayteskColors.TextDisabled,
-            modifier = Modifier.weight(1f),
-        )
-        MicIcon(
-            modifier = Modifier.size(20.dp),
-            tint = DayteskColors.Primary,
-        )
+    }
+
+    fun submit() {
+        val text = draft.trim()
+        if (text.isNotEmpty()) {
+            onAddItem(text)
+            draft = ""
+        }
+    }
+
+    PermissionGate(
+        permissions = listOf(Manifest.permission.RECORD_AUDIO),
+        rationale = PermissionRationale(
+            title = "Micrófono",
+            message = "Daytesk usa el micrófono para capturar ideas al inbox.",
+        ),
+    ) { requestPermission ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .shadow(2.dp, RoundedCornerShape(12.dp))
+                .background(Color.White, RoundedCornerShape(12.dp))
+                .border(1.dp, DayteskColors.Border, RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .border(1.5.dp, DayteskColors.TextDisabled, CircleShape)
+                    .clickable { submit() },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Agregar",
+                    tint = DayteskColors.TextDisabled,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+            BasicTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                textStyle = DayteskTypography.bodySm.copy(color = DayteskColors.TextPrimary),
+                cursorBrush = SolidColor(DayteskColors.Primary),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { submit() }),
+                decorationBox = { inner ->
+                    if (draft.isEmpty()) {
+                        Text(
+                            text = "Agregar tarea rápida...",
+                            style = DayteskTypography.bodySm,
+                            color = DayteskColors.TextDisabled,
+                        )
+                    }
+                    inner()
+                },
+            )
+            Box(
+                modifier = Modifier.clickable {
+                    requestPermission {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(
+                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                            )
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, JavaLocale.getDefault())
+                        }
+                        runCatching { speechLauncher.launch(intent) }
+                    }
+                },
+            ) {
+                MicIcon(
+                    modifier = Modifier.size(20.dp),
+                    tint = DayteskColors.Primary,
+                )
+            }
+        }
     }
 }
 

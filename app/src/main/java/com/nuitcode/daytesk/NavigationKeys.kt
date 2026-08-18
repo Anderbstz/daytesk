@@ -12,3 +12,6 @@ import kotlinx.serialization.Serializable
 @Serializable data object ImageOcr : NavKey
 @Serializable data object AudioTranscribe : NavKey
 @Serializable data object VideoTranscribe : NavKey
+@Serializable data object Historial : NavKey
+@Serializable data object Configuracion : NavKey
+@Serializable data object Ayuda : NavKey

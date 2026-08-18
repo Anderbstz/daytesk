@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 internal const val NETWORK_DISCLOSURE_TEXT =
-    "La transcripción usa el reconocimiento de voz integrado en Android. " +
-        "Requiere conexión a Internet para funcionar en la mayoría de los dispositivos. " +
+    "La primera vez se descarga un modelo de voz en el dispositivo. " +
+        "Requiere conexión a Internet para esa descarga. " +
         "Tu audio NO se envía a la nube."
 
 internal fun networkDisclosureContainsRequiredPhrase(text: String): Boolean =

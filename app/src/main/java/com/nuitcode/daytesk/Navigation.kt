@@ -57,9 +57,13 @@ import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.InboxItemDao
 import com.nuitcode.daytesk.data.local.TareaDao
 import com.nuitcode.daytesk.data.local.toEntity
+import com.nuitcode.daytesk.data.persistTaskCompletion
 import com.nuitcode.daytesk.model.InboxItem
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
+import com.nuitcode.daytesk.auth.SessionStore
+import com.nuitcode.daytesk.sync.CloudSync
+import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -107,6 +111,7 @@ fun DayteskApp(
     database: AppDatabase,
     contextoRepository: ContextoRepository =
         DefaultContextoRepository(database.contextoDao()),
+    onLogout: () -> Unit = {},
 ) {
     val tareaDao = database.tareaDao()
     val inboxItemDao = database.inboxItemDao()
@@ -116,12 +121,19 @@ fun DayteskApp(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showNuevaTarea by remember { mutableStateOf(false) }
+    var editingTarea by remember { mutableStateOf<Tarea?>(null) }
     var showRevisionSemanal by remember { mutableStateOf(false) }
     var detalleTareaSeleccionada by remember { mutableStateOf<Tarea?>(null) }
     var procesarInboxSeleccionado by remember { mutableStateOf<InboxItem?>(null) }
     var showAddContexto by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val sessionStore = remember { SessionStore(context) }
+    val cloudSync = remember { CloudSync(context, database, sessionStore) }
+
+    LaunchedEffect(Unit) {
+        cloudSync.onStart()
+    }
 
     // Hoisted so modals outside the Success branch can still read `data.contextos`.
     var cachedData by remember { mutableStateOf<DayteskData?>(null) }
@@ -138,16 +150,22 @@ fun DayteskApp(
                     state.data.tareasHoy + state.data.tareasSemana +
                         state.data.otrasPendientes + state.data.vencidas,
                 )
+                NextTaskWidgetProvider.refresh(context)
+                CloudSync.schedulePush(scope, cloudSync)
             }
             DayteskNavScaffold(
                 data = state.data,
                 contextoRepository = contextoRepository,
                 tareaDao = tareaDao,
                 inboxItemDao = inboxItemDao,
-                onShowNuevaTarea = { showNuevaTarea = true },
+                onShowNuevaTarea = {
+                    editingTarea = null
+                    showNuevaTarea = true
+                },
                 onShowDetalleTarea = { tarea -> detalleTareaSeleccionada = tarea },
                 onShowProcesarInbox = { item -> procesarInboxSeleccionado = item },
                 onShowRevisionSemanal = { showRevisionSemanal = true },
+                onLogout = onLogout,
             )
         }
         is DayteskUiState.Error -> {
@@ -171,12 +189,22 @@ fun DayteskApp(
                 contextos = currentData.contextos,
                 canAddContexto = currentData.contextos.size < Contexto.MAX_COUNT,
                 onAddContexto = { showAddContexto = true },
-                onDismiss = { showNuevaTarea = false },
+                initial = editingTarea,
+                onDismiss = {
+                    showNuevaTarea = false
+                    editingTarea = null
+                },
                 onSave = { tarea ->
                     scope.launch {
-                        val id = tareaDao.insertTarea(tarea.toEntity())
-                        ReminderScheduler.scheduleIfDue(context, id, tarea.titulo, tarea.fechaVencimiento)
+                        if (tarea.id == 0L) {
+                            val id = tareaDao.insertTarea(tarea.toEntity())
+                            ReminderScheduler.scheduleIfDue(context, id, tarea.titulo, tarea.fechaVencimiento)
+                        } else {
+                            tareaDao.updateTarea(tarea.toEntity())
+                            ReminderScheduler.scheduleIfDue(context, tarea.id, tarea.titulo, tarea.fechaVencimiento)
+                        }
                         showNuevaTarea = false
+                        editingTarea = null
                     }
                 },
             )
@@ -188,10 +216,14 @@ fun DayteskApp(
         DetalleTareaModal(
             tarea = tarea,
             onDismiss = { detalleTareaSeleccionada = null },
+            onEdit = {
+                editingTarea = tarea
+                showNuevaTarea = true
+                detalleTareaSeleccionada = null
+            },
             onComplete = {
                 scope.launch {
-                    tareaDao.updateTarea(tarea.withCompletion(true).toEntity())
-                    ReminderScheduler.cancelTaskReminder(context, tarea.id)
+                    persistTaskCompletion(context, tareaDao, tarea, completed = true)
                     detalleTareaSeleccionada = null
                 }
             },
@@ -339,6 +371,7 @@ private fun DayteskNavScaffold(
     onShowDetalleTarea: (Tarea) -> Unit,
     onShowProcesarInbox: (InboxItem) -> Unit,
     onShowRevisionSemanal: () -> Unit,
+    onLogout: () -> Unit = {},
 ) {
     val backStack = rememberNavBackStack(Inicio)
     val currentEntry = backStack.lastOrNull()
@@ -392,18 +425,7 @@ private fun DayteskNavScaffold(
                             if (tareaDao != null) {
                                 scope.launch {
                                     val task = findTaskById(data, taskId) ?: return@launch
-                                    val updated = task.withCompletion(completed)
-                                    tareaDao.updateTarea(updated.toEntity())
-                                    if (completed) {
-                                        ReminderScheduler.cancelTaskReminder(context, task.id)
-                                    } else {
-                                        ReminderScheduler.scheduleIfDue(
-                                            context,
-                                            task.id,
-                                            task.titulo,
-                                            task.fechaVencimiento,
-                                        )
-                                    }
+                                    persistTaskCompletion(context, tareaDao, task, completed)
                                 }
                             }
                         },
@@ -461,18 +483,7 @@ private fun DayteskNavScaffold(
                             if (tareaDao != null) {
                                 scope.launch {
                                     val task = findTaskById(data, taskId) ?: return@launch
-                                    val updated = task.withCompletion(completed)
-                                    tareaDao.updateTarea(updated.toEntity())
-                                    if (completed) {
-                                        ReminderScheduler.cancelTaskReminder(context, task.id)
-                                    } else {
-                                        ReminderScheduler.scheduleIfDue(
-                                            context,
-                                            task.id,
-                                            task.titulo,
-                                            task.fechaVencimiento,
-                                        )
-                                    }
+                                    persistTaskCompletion(context, tareaDao, task, completed)
                                 }
                             }
                         },
@@ -505,12 +516,7 @@ entry<Utilidades> {
                         onNavigateAyuda = { backStack.add(Ayuda) },
                         onNavigateHistorial = { backStack.add(Historial) },
                         onClearLocalData = {
-                            if (tareaDao != null && inboxItemDao != null) {
-                                scope.launch {
-                                    tareaDao.deleteAll()
-                                    inboxItemDao.deleteAll()
-                                }
-                            }
+                            onLogout()
                         },
                     )
                 }
@@ -577,14 +583,8 @@ private fun findTaskById(data: DayteskData, id: Long): Tarea? =
     data.tareasHoy.find { it.id == id }
         ?: data.tareasSemana.find { it.id == id }
         ?: data.otrasPendientes.find { it.id == id }
+        ?: data.vencidas.find { it.id == id }
         ?: data.completadas.find { it.id == id }
-
-private fun Tarea.withCompletion(completed: Boolean): Tarea =
-    if (completed) {
-        copy(estado = TareaEstado.COMPLETADA, fechaCompletada = System.currentTimeMillis())
-    } else {
-        copy(estado = TareaEstado.PENDIENTE, fechaCompletada = null)
-    }
 
 @Composable
 private fun DayteskBottomBar(

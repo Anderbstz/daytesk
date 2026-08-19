@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Prioridad
+import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.theme.DayteskColors
@@ -74,14 +75,18 @@ fun NuevaTareaModal(
     contextos: List<Contexto> = Contexto.DEFAULTS,
     canAddContexto: Boolean = contextos.size < Contexto.MAX_COUNT,
     onAddContexto: (() -> Unit)? = null,
+    initial: Tarea? = null,
 ) {
-    var titulo by remember { mutableStateOf("") }
-    var descripcion by remember { mutableStateOf("") }
-    var selectedContextoId by remember(contextos) {
-        mutableStateOf((contextos.firstOrNull() ?: Contexto.FALLBACK).id)
+    var titulo by remember(initial?.id) { mutableStateOf(initial?.titulo.orEmpty()) }
+    var descripcion by remember(initial?.id) { mutableStateOf(initial?.descripcion.orEmpty()) }
+    var selectedContextoId by remember(initial?.id, contextos) {
+        mutableStateOf(initial?.contextoId ?: (contextos.firstOrNull() ?: Contexto.FALLBACK).id)
     }
-    var selectedPrioridad by remember { mutableStateOf(Prioridad.MEDIA) }
-    var fechaVencimiento by remember { mutableStateOf<Long?>(null) }
+    var selectedPrioridad by remember(initial?.id) { mutableStateOf(initial?.prioridad ?: Prioridad.MEDIA) }
+    var fechaVencimiento by remember(initial?.id) { mutableStateOf(initial?.fechaVencimiento) }
+    var selectedRepeticion by remember(initial?.id) {
+        mutableStateOf(initial?.repeticion ?: Repeticion.NINGUNA)
+    }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
@@ -89,16 +94,23 @@ fun NuevaTareaModal(
     val selectedContexto = contextos.firstOrNull { it.id == selectedContextoId }
         ?: contextos.firstOrNull()
         ?: Contexto.FALLBACK
+    val editing = initial != null
 
     fun buildTarea(): Tarea = Tarea(
-        id = 0,
+        id = initial?.id ?: 0,
         titulo = titulo,
         descripcion = descripcion,
         contextoId = selectedContextoId,
         contexto = selectedContexto,
         prioridad = selectedPrioridad,
-        estado = TareaEstado.PENDIENTE,
+        estado = initial?.estado ?: TareaEstado.PENDIENTE,
+        fechaCreacion = initial?.fechaCreacion ?: System.currentTimeMillis(),
         fechaVencimiento = fechaVencimiento,
+        fechaCompletada = initial?.fechaCompletada,
+        orden = initial?.orden ?: 0,
+        repeticion = selectedRepeticion,
+        cloudKey = initial?.cloudKey ?: java.util.UUID.randomUUID().toString(),
+        updatedAt = System.currentTimeMillis(),
     )
 
     Column(
@@ -123,7 +135,7 @@ fun NuevaTareaModal(
                         .clickable { onDismiss() },
                 )
                 Text(
-                    text = "Nueva tarea",
+                    text = if (editing) "Editar tarea" else "Nueva tarea",
                     style = DayteskTypography.h1,
                     color = DayteskColors.TextPrimary,
                     modifier = Modifier
@@ -318,6 +330,45 @@ fun NuevaTareaModal(
                     }
                 }
 
+                Column {
+                    Text(
+                        text = "Repetición",
+                        style = DayteskTypography.bodySm,
+                        color = DayteskColors.TextSecondary,
+                        modifier = Modifier.padding(bottom = DayteskSpacing.sm),
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(DayteskSpacing.sm),
+                        verticalArrangement = Arrangement.spacedBy(DayteskSpacing.sm),
+                    ) {
+                        Repeticion.entries.forEach { option ->
+                            val isSelected = option == selectedRepeticion
+                            Box(
+                                modifier = Modifier
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(50))
+                                    .background(
+                                        if (isSelected) DayteskColors.PrimaryLight
+                                        else DayteskColors.Surface,
+                                    )
+                                    .then(
+                                        if (!isSelected) Modifier.border(1.dp, DayteskColors.Border, RoundedCornerShape(50))
+                                        else Modifier,
+                                    )
+                                    .clickable { selectedRepeticion = option }
+                                    .padding(horizontal = DayteskSpacing.lg),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = option.label(),
+                                    style = DayteskTypography.bodySm,
+                                    color = if (isSelected) DayteskColors.Primary else DayteskColors.TextSecondary,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(DayteskSpacing.sm))
             }
 
@@ -328,7 +379,7 @@ fun NuevaTareaModal(
                     .padding(horizontal = DayteskSpacing.xl, vertical = DayteskSpacing.xl),
             ) {
                 PillButton(
-                    text = "Crear tarea",
+                    text = if (editing) "Guardar cambios" else "Crear tarea",
                     onClick = {
                         if (titulo.isNotBlank()) {
                             onSave(buildTarea())
@@ -342,7 +393,7 @@ fun NuevaTareaModal(
     // ── Date picker dialog ─────────────────────────────
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = System.currentTimeMillis(),
+            initialSelectedDateMillis = fechaVencimiento ?: System.currentTimeMillis(),
         )
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },

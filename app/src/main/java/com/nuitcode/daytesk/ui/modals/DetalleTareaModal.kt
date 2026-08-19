@@ -50,6 +50,7 @@ fun DetalleTareaModal(
     onDismiss: () -> Unit,
     onComplete: () -> Unit,
     onDelete: () -> Unit,
+    onEdit: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -92,6 +93,14 @@ fun DetalleTareaModal(
                     color = DayteskColors.TextPrimary,
                     modifier = Modifier.align(Alignment.Center),
                     textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = "Editar",
+                    style = DayteskTypography.label,
+                    color = DayteskColors.Primary,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .clickable { onEdit() },
                 )
             }
 
@@ -214,6 +223,16 @@ fun DetalleTareaModal(
                             }
                         },
                     )
+
+                    if (tarea.repeticion != com.nuitcode.daytesk.model.Repeticion.NINGUNA) {
+                        DetailRow(
+                            icon = {
+                                Text(text = "↻", fontSize = 16.sp, color = DayteskColors.TextDisabled)
+                            },
+                            label = "Repetición",
+                            value = tarea.repeticion.label(),
+                        )
+                    }
 
                     // Created date
                     DetailRow(

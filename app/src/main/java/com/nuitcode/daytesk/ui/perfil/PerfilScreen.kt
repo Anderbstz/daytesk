@@ -256,14 +256,14 @@ private fun SettingsList(
             onDismissRequest = { showLogoutConfirm = false },
             title = { Text("Cerrar sesión") },
             text = {
-                Text("Daytesk no usa cuenta en la nube. Esto borra tareas e inbox de este dispositivo.")
+                Text("Se cierra tu sesión. Las tareas de este teléfono se quedan guardadas.")
             },
             confirmButton = {
                 TextButton(onClick = {
                     onClearLocalData()
                     showLogoutConfirm = false
                 }) {
-                    Text("Borrar datos", color = DayteskColors.Urgent)
+                    Text("Cerrar sesión", color = DayteskColors.Urgent)
                 }
             },
             dismissButton = {

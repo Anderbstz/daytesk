@@ -24,7 +24,7 @@ object AudioExtractor {
     private const val WAV_HEADER_SIZE = 44
     private const val TIMEOUT_US = 50_000L
     private const val MAX_LOOPS = 400_000
-    private const val MAX_SECONDS = 10
+    private const val MAX_SECONDS = 20
     private const val INFO_OUTPUT_BUFFERS_CHANGED = -3
 
     fun extractAudioTrackToWav(
@@ -63,6 +63,7 @@ object AudioExtractor {
 
         val copied = copyUriToCache(context, sourceUri, mime, expectedKind)
         try {
+            if (writeIfPcmWav(copied, outputFile)) return
             try {
                 decodeOrThrow(copied, outputFile)
             } catch (first: TranscriptionException) {
@@ -91,7 +92,7 @@ object AudioExtractor {
     ): File {
         val dest = File(
             context.cacheDir,
-            "transcription/source-${System.currentTimeMillis()}${extensionFor(mime, expectedKind)}",
+            "transcription/source-${System.currentTimeMillis()}${extensionFor(mime, expectedKind, uri)}",
         )
         dest.parentFile?.mkdirs()
         try {
@@ -249,7 +250,12 @@ object AudioExtractor {
         extractor.setDataSource(source.absolutePath)
     }
 
-    private fun extensionFor(mime: String, expectedKind: MediaKind?): String {
+    private fun extensionFor(mime: String, expectedKind: MediaKind?, uri: Uri): String {
+        val fromPath = uri.lastPathSegment
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.lowercase()
+            ?.takeIf { ext -> ext.length in 2..5 && ext.all { it.isLetterOrDigit() } }
+        if (fromPath != null) return ".$fromPath"
         val lower = mime.lowercase()
         return when {
             lower.contains("mp4") || lower.contains("mpeg4") -> if (expectedKind == MediaKind.AUDIO) ".m4a" else ".mp4"
@@ -263,6 +269,46 @@ object AudioExtractor {
             lower.contains("ogg") -> ".ogg"
             expectedKind == MediaKind.VIDEO -> ".mp4"
             else -> ".m4a"
+        }
+    }
+
+    private fun writeIfPcmWav(source: File, outputFile: File): Boolean {
+        if (source.length() <= WAV_HEADER_SIZE) return false
+        val header = ByteArray(WAV_HEADER_SIZE)
+        RandomAccessFile(source, "r").use { raf ->
+            raf.readFully(header)
+            val buffer = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+            val riff = ByteArray(4).also { buffer.get(it) }.toString(Charsets.US_ASCII)
+            val chunkSize = buffer.int
+            val wave = ByteArray(4).also { buffer.get(it) }.toString(Charsets.US_ASCII)
+            val fmt = ByteArray(4).also { buffer.get(it) }.toString(Charsets.US_ASCII)
+            if (riff != "RIFF" || wave != "WAVE" || fmt != "fmt ") return false
+            val fmtSize = buffer.int
+            val audioFormat = buffer.short.toInt()
+            val channels = buffer.short.toInt().coerceAtLeast(1)
+            val sampleRate = buffer.int.coerceAtLeast(1)
+            buffer.int // byte rate
+            buffer.short // block align
+            val bits = buffer.short.toInt()
+            if (audioFormat != 1 || (bits != 16 && bits != 8) || fmtSize < 16) return false
+            var dataOffset = 12 + 8 + fmtSize
+            if (dataOffset + 8 > source.length()) return false
+            raf.seek(dataOffset.toLong())
+            val dataId = ByteArray(4)
+            raf.readFully(dataId)
+            if (String(dataId, Charsets.US_ASCII) != "data") return false
+            val dataSizeBuf = ByteArray(4)
+            raf.readFully(dataSizeBuf)
+            val dataSize = ByteBuffer.wrap(dataSizeBuf).order(ByteOrder.LITTLE_ENDIAN).int
+                .coerceAtMost((source.length() - raf.filePointer).toInt())
+                .coerceAtLeast(0)
+            val pcm = ByteArray(dataSize)
+            raf.readFully(pcm)
+            val encoding = if (bits == 8) AudioFormat.ENCODING_PCM_8BIT else AudioFormat.ENCODING_PCM_16BIT
+            val mono16k = toMono16kPcm(pcm, sampleRate, channels, encoding)
+            if (mono16k.isEmpty()) return false
+            writeWavFile(outputFile, mono16k)
+            return true
         }
     }
 

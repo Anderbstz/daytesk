@@ -1,7 +1,10 @@
 package com.nuitcode.daytesk.ui.perfil
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -79,7 +82,7 @@ fun ConfiguracionScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Recordatorios", style = DayteskTypography.bodyMd, color = DayteskColors.TextPrimary)
                     Text(
-                        "Avisos locales al vencer una tarea. No usan un servidor ni tienen costo.",
+                        "Avisos locales 1 hora antes y al vencer. No usan un servidor ni tienen costo.",
                         style = DayteskTypography.caption,
                         color = DayteskColors.TextSecondary,
                     )
@@ -98,6 +101,24 @@ fun ConfiguracionScreen(
                         checkedTrackColor = DayteskColors.Primary,
                     ),
                 )
+            }
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            !ReminderScheduler.canScheduleExactAlarms(context)
+        ) {
+            TextButton(
+                onClick = {
+                    context.startActivity(
+                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                            data = Uri.parse("package:${context.packageName}")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        },
+                    )
+                },
+                modifier = Modifier.padding(horizontal = DayteskSpacing.lg),
+            ) {
+                Text("Permitir alarmas exactas", color = DayteskColors.Primary)
             }
         }
 

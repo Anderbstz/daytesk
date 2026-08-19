@@ -73,6 +73,8 @@ class DefaultContextoRepository(
                     iconId = contexto.iconId,
                     orden = nextOrden,
                     esDefault = false,
+                    cloudKey = contexto.cloudKey.ifBlank { java.util.UUID.randomUUID().toString() },
+                    updatedAt = System.currentTimeMillis(),
                 ),
             )
             Result.success(id)
@@ -98,6 +100,8 @@ class DefaultContextoRepository(
                     iconId = contexto.iconId,
                     orden = existing.orden,
                     esDefault = existing.esDefault,
+                    cloudKey = existing.cloudKey.ifBlank { "default-${existing.id}" },
+                    updatedAt = System.currentTimeMillis(),
                 ),
             )
             Result.success(Unit)

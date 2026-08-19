@@ -333,6 +333,21 @@ private class FakeContextoDao : ContextoDao {
     override suspend fun getById(id: Long): ContextoEntity? =
         storage.firstOrNull { it.id == id }
 
+    override suspend fun getAllOnce(): List<ContextoEntity> =
+        storage.sortedBy { it.orden }
+
+    override suspend fun deleteAll() {
+        storage.clear()
+    }
+
+    override suspend fun upsert(entity: ContextoEntity): Long {
+        val assignedId = if (entity.id == 0L) nextId++ else entity.id
+        val withId = entity.copy(id = assignedId)
+        val idx = storage.indexOfFirst { it.id == assignedId }
+        if (idx >= 0) storage[idx] = withId else storage.add(withId)
+        return assignedId
+    }
+
     override suspend fun countTareasForContext(id: Long): Int = countFor[id] ?: 0
 
     override suspend fun reassignTareas(oldId: Long, newId: Long) {

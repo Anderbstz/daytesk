@@ -22,6 +22,9 @@ data class Tarea(
     val fechaVencimiento: Long? = null,
     val fechaCompletada: Long? = null,
     val orden: Int = 0,
+    val repeticion: Repeticion = Repeticion.NINGUNA,
+    val cloudKey: String = java.util.UUID.randomUUID().toString(),
+    val updatedAt: Long = System.currentTimeMillis(),
 ) {
     companion object {
         const val TITULO_MAX_LENGTH = 150

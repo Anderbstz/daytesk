@@ -29,6 +29,8 @@ data class ContextoEntity(
     val iconId: Int? = null,
     val orden: Int,
     val esDefault: Boolean,
+    val cloudKey: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
 )
 
 /**
@@ -41,6 +43,14 @@ fun ContextoEntity.toDomain(): Contexto = Contexto(
     nombre = nombre,
     color = color,
     iconId = iconId,
+    cloudKey = cloudKey.ifBlank {
+        when {
+            id in 1L..4L -> "default-$id"
+            id != 0L -> "local-contexto-$id"
+            else -> java.util.UUID.randomUUID().toString()
+        }
+    },
+    updatedAt = updatedAt,
 )
 
 /**
@@ -55,4 +65,12 @@ fun Contexto.toEntity(orden: Int, esDefault: Boolean): ContextoEntity = Contexto
     iconId = iconId,
     orden = orden,
     esDefault = esDefault,
+    cloudKey = cloudKey.ifBlank {
+        when {
+            id in 1L..4L -> "default-$id"
+            id != 0L -> "local-contexto-$id"
+            else -> java.util.UUID.randomUUID().toString()
+        }
+    },
+    updatedAt = updatedAt,
 )

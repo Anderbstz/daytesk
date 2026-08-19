@@ -22,6 +22,8 @@ data class Contexto(
     val nombre: String,
     val color: Int,
     val iconId: Int? = null,
+    val cloudKey: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
 ) {
     fun color(): Color = Color(color)
     fun colorLight(): Color = color().copy(alpha = 0.15f)

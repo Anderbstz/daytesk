@@ -13,6 +13,9 @@ interface TareaDao {
     @Query("SELECT * FROM tareas ORDER BY orden ASC")
     fun getAllTareas(): Flow<List<TareaEntity>>
 
+    @Query("SELECT * FROM tareas ORDER BY orden ASC")
+    suspend fun getAllOnce(): List<TareaEntity>
+
     @Query("SELECT * FROM tareas WHERE id = :id")
     suspend fun getTareaById(id: Long): TareaEntity?
 

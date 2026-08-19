@@ -5,14 +5,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.nuitcode.daytesk.data.MockData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
     entities = [TareaEntity::class, InboxItemEntity::class, ContextoEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -36,7 +35,7 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "daytesk.db",
             )
-                .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3)
+                .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4)
                 .addCallback(
                     object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
@@ -51,10 +50,8 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * First-install path. Seeds the 4 default `contextos` rows and then the
-         * existing mock tareas / inbox items. On upgrade from v1 the migration
-         * already seeded the same 4 rows so this callback is a no-op for them
-         * (INSERT OR IGNORE in the migration guards against duplicates).
+         * First-install path. Seeds the 4 default `contextos`. Tareas e inbox
+         * empiezan vacíos y se sincronizan con la cuenta.
          */
         private suspend fun populateDatabase(db: AppDatabase) {
             val contextoDao = db.contextoDao()
@@ -65,12 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
                     contextoDao.insert(seed.toEntity())
                 }
             }
-            MockData.tareas.forEach { tarea ->
-                db.tareaDao().insertTarea(tarea.toEntity())
-            }
-            MockData.inboxItems.forEach { item ->
-                db.inboxItemDao().insertItem(item.toEntity())
-            }
+            // Tareas e inbox empiezan vacíos; se sincronizan con la cuenta.
         }
     }
 }
@@ -102,5 +94,7 @@ internal enum class ContextoSeed(
         iconId = null,
         orden = orden,
         esDefault = true,
+        cloudKey = "default-$id",
+        updatedAt = 0L,
     )
 }

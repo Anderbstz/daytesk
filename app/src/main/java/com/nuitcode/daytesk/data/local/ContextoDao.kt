@@ -30,8 +30,17 @@ interface ContextoDao {
     @Query("SELECT * FROM contextos WHERE id = :id")
     suspend fun getById(id: Long): ContextoEntity?
 
+    @Query("SELECT * FROM contextos ORDER BY orden ASC")
+    suspend fun getAllOnce(): List<ContextoEntity>
+
+    @Query("DELETE FROM contextos")
+    suspend fun deleteAll()
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(entity: ContextoEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(entity: ContextoEntity): Long
 
     @Update
     suspend fun update(entity: ContextoEntity)

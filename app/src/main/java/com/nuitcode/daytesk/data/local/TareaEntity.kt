@@ -4,6 +4,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Prioridad
+import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 
@@ -33,6 +34,9 @@ data class TareaEntity(
     val fechaVencimiento: Long? = null,
     val fechaCompletada: Long? = null,
     val orden: Int = 0,
+    val repeticion: String = "NINGUNA",
+    val cloudKey: String = "",
+    val updatedAt: Long = System.currentTimeMillis(),
 )
 
 /**
@@ -53,6 +57,9 @@ fun TareaEntity.toDomain(): Tarea = Tarea(
     fechaVencimiento = fechaVencimiento,
     fechaCompletada = fechaCompletada,
     orden = orden,
+    repeticion = runCatching { Repeticion.valueOf(repeticion) }.getOrDefault(Repeticion.NINGUNA),
+    cloudKey = cloudKey.ifBlank { "local-tarea-$id" },
+    updatedAt = updatedAt,
 )
 
 /**
@@ -69,4 +76,9 @@ fun Tarea.toEntity(): TareaEntity = TareaEntity(
     fechaVencimiento = fechaVencimiento,
     fechaCompletada = fechaCompletada,
     orden = orden,
+    repeticion = repeticion.name,
+    cloudKey = cloudKey.ifBlank {
+        if (id != 0L) "local-tarea-$id" else java.util.UUID.randomUUID().toString()
+    },
+    updatedAt = updatedAt,
 )

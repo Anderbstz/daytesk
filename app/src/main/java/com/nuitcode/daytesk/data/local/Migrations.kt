@@ -87,6 +87,18 @@ object Migrations {
             )
         }
     }
+
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `tareas` ADD COLUMN `repeticion` TEXT NOT NULL DEFAULT 'NINGUNA'")
+            db.execSQL("ALTER TABLE `tareas` ADD COLUMN `cloudKey` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `tareas` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `inbox_items` ADD COLUMN `cloudKey` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `inbox_items` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE `contextos` ADD COLUMN `cloudKey` TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE `contextos` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
 }
 
 /**

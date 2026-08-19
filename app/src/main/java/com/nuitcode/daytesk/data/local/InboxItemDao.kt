@@ -13,6 +13,9 @@ interface InboxItemDao {
     @Query("SELECT * FROM inbox_items ORDER BY timestamp DESC")
     fun getAllItems(): Flow<List<InboxItemEntity>>
 
+    @Query("SELECT * FROM inbox_items ORDER BY timestamp DESC")
+    suspend fun getAllOnce(): List<InboxItemEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: InboxItemEntity): Long
 

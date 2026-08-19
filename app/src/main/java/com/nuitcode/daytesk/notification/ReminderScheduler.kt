@@ -13,29 +13,32 @@ object ReminderScheduler {
     private const val ACTION_REMINDER = "com.nuitcode.daytesk.REMINDER"
     const val EXTRA_TASK_ID = "task_id"
     const val EXTRA_TITLE = "task_title"
+    const val EXTRA_EARLY = "early"
     const val WEEKLY_REVIEW_ID = 0L
+    private const val HOUR_MS = 60 * 60 * 1000L
 
     fun scheduleIfDue(context: Context, taskId: Long, taskTitle: String, dueMillis: Long?) {
-        if (dueMillis == null) {
-            cancelTaskReminder(context, taskId)
-            return
+        cancelTaskReminder(context, taskId)
+        if (dueMillis == null) return
+        val now = System.currentTimeMillis()
+        if (dueMillis > now) {
+            scheduleAt(context, taskId, taskTitle, dueMillis, early = false)
         }
-        val delay = dueMillis - System.currentTimeMillis()
-        if (delay <= 0L) {
-            cancelTaskReminder(context, taskId)
-            return
+        val earlyAt = dueMillis - HOUR_MS
+        if (earlyAt > now) {
+            scheduleAt(context, taskId, taskTitle, earlyAt, early = true)
         }
-        scheduleAt(context, taskId, taskTitle, dueMillis)
     }
 
     fun scheduleTaskReminder(context: Context, taskId: Long, taskTitle: String, delayMillis: Long) {
         val triggerAt = System.currentTimeMillis() + delayMillis.coerceAtLeast(0L)
-        scheduleAt(context, taskId, taskTitle, triggerAt)
+        scheduleAt(context, taskId, taskTitle, triggerAt, early = false)
     }
 
     fun cancelTaskReminder(context: Context, taskId: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.cancel(pendingIntent(context, taskId, ""))
+        alarmManager.cancel(pendingIntent(context, taskId, "", early = false))
+        alarmManager.cancel(pendingIntent(context, taskId, "", early = true))
     }
 
     fun scheduleWeeklyReview(context: Context) {
@@ -44,6 +47,7 @@ object ReminderScheduler {
             WEEKLY_REVIEW_ID,
             "Revisión semanal",
             System.currentTimeMillis() + millisUntilNextSundayMorning(),
+            early = false,
         )
     }
 
@@ -56,10 +60,22 @@ object ReminderScheduler {
             }
     }
 
-    private fun scheduleAt(context: Context, taskId: Long, title: String, triggerAtMillis: Long) {
+    fun canScheduleExactAlarms(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return alarmManager.canScheduleExactAlarms()
+    }
+
+    private fun scheduleAt(
+        context: Context,
+        taskId: Long,
+        title: String,
+        triggerAtMillis: Long,
+        early: Boolean,
+    ) {
         NotificationHelper.createNotificationChannel(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val pending = pendingIntent(context, taskId, title)
+        val pending = pendingIntent(context, taskId, title, early)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
         } else {
@@ -67,19 +83,31 @@ object ReminderScheduler {
         }
     }
 
-    private fun pendingIntent(context: Context, taskId: Long, title: String): PendingIntent {
+    private fun pendingIntent(
+        context: Context,
+        taskId: Long,
+        title: String,
+        early: Boolean,
+    ): PendingIntent {
+        val kind = if (early) "early" else "due"
         val intent = Intent(context, ReminderReceiver::class.java).apply {
             action = ACTION_REMINDER
-            data = Uri.parse("daytesk://reminder/$taskId")
+            data = Uri.parse("daytesk://reminder/$taskId/$kind")
             putExtra(EXTRA_TASK_ID, taskId)
             putExtra(EXTRA_TITLE, title)
+            putExtra(EXTRA_EARLY, early)
         }
         return PendingIntent.getBroadcast(
             context,
-            taskId.toInt(),
+            requestCode(taskId, early),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+    }
+
+    private fun requestCode(taskId: Long, early: Boolean): Int {
+        val base = (taskId and 0x7FFFFFFF).toInt()
+        return if (early) base xor 0x40000000 else base
     }
 
     private fun millisUntilNextSundayMorning(): Long {

@@ -12,6 +12,7 @@ class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val taskId = intent.getLongExtra(ReminderScheduler.EXTRA_TASK_ID, -1L)
         val title = intent.getStringExtra(ReminderScheduler.EXTRA_TITLE) ?: return
+        val early = intent.getBooleanExtra(ReminderScheduler.EXTRA_EARLY, false)
         if (taskId == ReminderScheduler.WEEKLY_REVIEW_ID) {
             NotificationHelper.showTaskReminder(context, title, taskId)
             ReminderScheduler.scheduleWeeklyReview(context)
@@ -24,7 +25,7 @@ class ReminderReceiver : BroadcastReceiver() {
             try {
                 val tarea = AppDatabase.getInstance(context).tareaDao().getTareaById(taskId)
                 if (tarea != null && tarea.estado != "COMPLETADA") {
-                    NotificationHelper.showTaskReminder(context, title, taskId)
+                    NotificationHelper.showTaskReminder(context, title, taskId, early)
                 }
             } finally {
                 pending.finish()

@@ -27,7 +27,7 @@ object NotificationHelper {
         manager.createNotificationChannel(channel)
     }
 
-    fun showTaskReminder(context: Context, taskTitle: String, taskId: Long) {
+    fun showTaskReminder(context: Context, taskTitle: String, taskId: Long, early: Boolean = false) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("task_id", taskId)
@@ -37,16 +37,18 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val text = if (early) "En 1 hora: $taskTitle" else "Tarea pendiente: $taskTitle"
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("\uD83D\uDCCB Daytesk")
-            .setContentText("Tarea pendiente: $taskTitle")
+            .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(taskId.toInt(), notification)
+        val notifyId = if (early) taskId.toInt() xor 0x40000000 else taskId.toInt()
+        manager.notify(notifyId, notification)
     }
 }

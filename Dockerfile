@@ -22,7 +22,10 @@ RUN chmod +x ./gradlew
 RUN ./gradlew :server:dependencies --no-daemon || true
 
 # 1c) Ahora sí, todo el código fuente.
-COPY . .
+#     --chmod=0755 fuerza el bit de ejecución sobre `gradlew` y demás scripts
+#     (Docker BuildKit). Sin esto, Git checkout vía HTTPS pierde el +x y al
+#     llegar al RUN ./gradlew final sale con "Permission denied" (exit 126).
+COPY --chmod=0755 . .
 
 # 1d) Compilamos y dejamos lista la "install distribution" del server.
 #     Produce: server/build/install/daytesk-server/

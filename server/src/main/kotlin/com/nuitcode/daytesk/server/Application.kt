@@ -21,8 +21,10 @@ import kotlinx.serialization.json.Json
 
 fun main() {
     AuthService.seedDefaultUser()
-    val source = if (Env.usesNeon) "Neon" else "memoria (llená env/.env con DATABASE_URL)"
+    val source = if (Env.usesNeon) "Neon" else "memoria (llená DATABASE_URL en Render o env/.env)"
+    val hasUrl = !System.getenv("DATABASE_URL").isNullOrBlank()
     println("Daytesk API en http://127.0.0.1:${Env.port}  [$source]")
+    println("getenv DATABASE_URL: ${if (hasUrl) "presente" else "ausente"}")
     println("Usuario default: ander / anderbstz@gmail.com")
 
     embeddedServer(Netty, port = Env.port, host = "0.0.0.0") {

@@ -45,7 +45,11 @@ object Database {
         val host = uri.host
         val port = if (uri.port > 0) uri.port else 5432
         val database = uri.path.trim('/').ifBlank { "neondb" }
-        val query = uri.query?.takeIf { it.isNotBlank() } ?: "sslmode=require"
+        val query = (uri.query ?: "sslmode=require")
+            .split("&")
+            .filter { it.isNotBlank() && !it.startsWith("channel_binding", ignoreCase = true) }
+            .joinToString("&")
+            .ifBlank { "sslmode=require" }
         return Jdbc(
             url = "jdbc:postgresql://$host:$port/$database?$query",
             user = user,

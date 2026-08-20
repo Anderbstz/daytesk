@@ -6,8 +6,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object AuthApi {
-    /** Emulador Android → PC local. En un teléfono físico cambiá esto por la IP de tu PC. */
-    const val BASE_URL = "http://10.0.2.2:8080"
+    /** Producción (Render). En local sin deploy, usá http://10.0.2.2:8080 */
+    const val BASE_URL = "https://daytesk.onrender.com"
 
     data class LoginResult(
         val token: String,
@@ -108,8 +108,8 @@ object AuthApi {
         return runCatching {
             val connection = (URL("$BASE_URL$path").openConnection() as HttpURLConnection).apply {
                 requestMethod = method
-                connectTimeout = 12_000
-                readTimeout = 12_000
+                connectTimeout = 45_000
+                readTimeout = 45_000
                 if (!token.isNullOrBlank()) {
                     setRequestProperty("Authorization", "Bearer $token")
                 }

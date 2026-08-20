@@ -3,15 +3,25 @@ package com.nuitcode.daytesk.server
 import java.io.File
 
 object Env {
-    private val values: Map<String, String> = load()
-
-    val databaseUrl: String get() = values["DATABASE_URL"].orEmpty().trim()
-    val jwtSecret: String get() = values["JWT_SECRET"]?.trim().orEmpty().ifBlank { "daytesk-dev-secret-change-me" }
-    val port: Int get() = values["PORT"]?.toIntOrNull() ?: 8080
-    val apiBaseUrl: String get() = values["API_BASE_URL"]?.trim().orEmpty().ifBlank { "http://10.0.2.2:8080" }
+    val databaseUrl: String get() = read("DATABASE_URL")
+    val jwtSecret: String get() = read("JWT_SECRET").ifBlank { "daytesk-dev-secret-change-me" }
+    val port: Int get() = read("PORT").toIntOrNull() ?: 8080
+    val apiBaseUrl: String get() = read("API_BASE_URL").ifBlank { "http://10.0.2.2:8080" }
     val usesNeon: Boolean get() = databaseUrl.isNotBlank()
 
-    private fun load(): Map<String, String> {
+    private fun read(name: String): String {
+        val fromEnv = System.getenv(name)?.trim()?.trim('"', '\'')
+        if (!fromEnv.isNullOrEmpty()) return fromEnv
+        val ignoreCase = System.getenv()?.entries
+            ?.firstOrNull { it.key.equals(name, ignoreCase = true) }
+            ?.value
+            ?.trim()
+            ?.trim('"', '\'')
+        if (!ignoreCase.isNullOrEmpty()) return ignoreCase
+        return loadEnvFile()[name].orEmpty()
+    }
+
+    private fun loadEnvFile(): Map<String, String> {
         val file = findEnvFile() ?: return emptyMap()
         return file.readLines()
             .map { it.trim() }

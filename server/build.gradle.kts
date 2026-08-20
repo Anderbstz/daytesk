@@ -10,6 +10,9 @@ kotlin {
 
 application {
     mainClass.set("com.nuitcode.daytesk.server.ApplicationKt")
+    // Nombre del binario que genera `:server:installDist`.
+    // Mantenerlo fijo evita que el Dockerfile dependa del rootProject.name.
+    applicationName = "daytesk-server"
 }
 
 dependencies {

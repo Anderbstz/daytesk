@@ -130,9 +130,11 @@ fun DayteskApp(
     val context = LocalContext.current
     val sessionStore = remember { SessionStore(context) }
     val cloudSync = remember { CloudSync(context, database, sessionStore) }
+    var syncReady by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         cloudSync.onStart()
+        syncReady = true
     }
 
     // Hoisted so modals outside the Success branch can still read `data.contextos`.
@@ -144,7 +146,8 @@ fun DayteskApp(
         }
         is DayteskUiState.Success -> {
             cachedData = state.data
-            LaunchedEffect(state.data) {
+            LaunchedEffect(state.data, syncReady) {
+                if (!syncReady) return@LaunchedEffect
                 ReminderScheduler.reschedulePending(
                     context,
                     state.data.tareasHoy + state.data.tareasSemana +

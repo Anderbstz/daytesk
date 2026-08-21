@@ -58,8 +58,13 @@ class CloudSync(
     private suspend fun pullOrPushLocked(token: String) {
         val remote = AuthApi.pullSync(token).getOrThrow()
         if (remote.isEmpty()) {
+            if (sessionStore.consumeWipeLocal()) {
+                database.tareaDao().deleteAll()
+                database.inboxItemDao().deleteAll()
+            }
             pushLocked(token)
         } else {
+            sessionStore.consumeWipeLocal()
             applyLocked(remote)
         }
     }

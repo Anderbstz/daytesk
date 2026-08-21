@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -28,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.auth.AuthApi
 import com.nuitcode.daytesk.auth.SessionStore
@@ -48,12 +51,13 @@ fun LoginScreen(
     var email by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("12345678") }
+    var showPassword by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val canSubmit = if (registerMode) {
-        email.isNotBlank() && username.isNotBlank() && password.length >= 8
+        email.isNotBlank() && username.length >= 3 && password.length >= 8
     } else {
         identifier.isNotBlank() && password.isNotBlank()
     }
@@ -63,6 +67,7 @@ fun LoginScreen(
             .fillMaxSize()
             .background(DayteskColors.Background)
             .systemBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.Center,
@@ -85,6 +90,7 @@ fun LoginScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                 shape = RoundedCornerShape(16.dp),
                 colors = fieldColors(),
+                textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
             )
             Spacer(modifier = Modifier.height(DayteskSpacing.md))
             OutlinedTextField(
@@ -92,9 +98,10 @@ fun LoginScreen(
                 onValueChange = { username = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Usuario") },
+                label = { Text("Usuario (mín. 3)") },
                 shape = RoundedCornerShape(16.dp),
                 colors = fieldColors(),
+                textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
             )
         } else {
             OutlinedTextField(
@@ -105,6 +112,7 @@ fun LoginScreen(
                 label = { Text("Usuario o email") },
                 shape = RoundedCornerShape(16.dp),
                 colors = fieldColors(),
+                textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
             )
         }
         Spacer(modifier = Modifier.height(DayteskSpacing.md))
@@ -114,10 +122,23 @@ fun LoginScreen(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             label = { Text(if (registerMode) "Contraseña (mín. 8)" else "Contraseña") },
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (showPassword) {
+                VisualTransformation.None
+            } else {
+                PasswordVisualTransformation()
+            },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                IconButton(onClick = { showPassword = !showPassword }) {
+                    Text(
+                        text = if (showPassword) "🙈" else "👁",
+                        style = DayteskTypography.bodyMd,
+                    )
+                }
+            },
             shape = RoundedCornerShape(16.dp),
             colors = fieldColors(),
+            textStyle = DayteskTypography.bodyMd.copy(color = DayteskColors.TextPrimary),
         )
         error?.let {
             Spacer(modifier = Modifier.height(12.dp))
@@ -139,7 +160,7 @@ fun LoginScreen(
                     }
                     loading = false
                     result.onSuccess { session ->
-                        sessionStore.save(session.token, session.displayName, session.email)
+                        sessionStore.save(session.token, session.displayName, session.email, newAccount = registerMode)
                         onLoggedIn()
                     }.onFailure { failure ->
                         error = failure.message ?: "No se pudo continuar."
@@ -151,7 +172,10 @@ fun LoginScreen(
                 .fillMaxWidth()
                 .height(52.dp),
             shape = RoundedCornerShape(50),
-            colors = ButtonDefaults.buttonColors(containerColor = DayteskColors.Primary),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = DayteskColors.Primary,
+                disabledContainerColor = DayteskColors.PrimaryLight,
+            ),
         ) {
             val label = when {
                 loading && registerMode -> "Creando…"
@@ -161,17 +185,20 @@ fun LoginScreen(
             }
             Text(label, color = androidx.compose.ui.graphics.Color.White)
         }
+        Spacer(modifier = Modifier.height(8.dp))
         TextButton(
             onClick = {
                 registerMode = !registerMode
                 error = null
-                if (registerMode) password = ""
+                showPassword = false
+                password = if (registerMode) "" else "12345678"
             },
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
                 if (registerMode) "Ya tengo cuenta" else "Crear cuenta",
                 color = DayteskColors.Primary,
+                style = DayteskTypography.bodyMd,
             )
         }
         if (!registerMode) {
@@ -179,7 +206,7 @@ fun LoginScreen(
             Text(
                 "Usuario default: ander  ·  contraseña: 12345678",
                 style = DayteskTypography.caption,
-                color = DayteskColors.TextDisabled,
+                color = DayteskColors.TextSecondary,
             )
         }
     }
@@ -187,9 +214,16 @@ fun LoginScreen(
 
 @Composable
 private fun fieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = DayteskColors.TextPrimary,
+    unfocusedTextColor = DayteskColors.TextPrimary,
+    disabledTextColor = DayteskColors.TextSecondary,
     focusedBorderColor = DayteskColors.Primary,
-    unfocusedBorderColor = DayteskColors.Border,
+    unfocusedBorderColor = DayteskColors.TextSecondary,
     focusedContainerColor = DayteskColors.Surface,
     unfocusedContainerColor = DayteskColors.Surface,
+    focusedLabelColor = DayteskColors.Primary,
+    unfocusedLabelColor = DayteskColors.TextSecondary,
     cursorColor = DayteskColors.Primary,
+    focusedTrailingIconColor = DayteskColors.Primary,
+    unfocusedTrailingIconColor = DayteskColors.Primary,
 )

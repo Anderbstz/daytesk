@@ -1,5 +1,6 @@
 package com.nuitcode.daytesk.server
 
+import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -12,6 +13,7 @@ import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
 import io.ktor.server.routing.put
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -48,6 +50,13 @@ fun main() {
             }
         }
         routing {
+            get("/") {
+                call.respondText(
+                    "Daytesk API está al aire. Esto no es una web: el login es en la app Android.\n" +
+                        "Chequeo: GET /health",
+                    ContentType.Text.Plain,
+                )
+            }
             get("/health") {
                 call.respond(HealthBody(ok = true, database = if (Env.usesNeon) "neon" else "memory"))
             }

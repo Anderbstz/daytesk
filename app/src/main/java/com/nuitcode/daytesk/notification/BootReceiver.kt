@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.toDomain
+import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -23,6 +24,8 @@ class BootReceiver : BroadcastReceiver() {
                     .first()
                     .map { it.toDomain() }
                 ReminderScheduler.reschedulePending(context, tareas)
+                NextTaskWidgetProvider.refresh(context)
+                NextTaskWidgetProvider.refresh(context)
             } finally {
                 pending.finish()
             }

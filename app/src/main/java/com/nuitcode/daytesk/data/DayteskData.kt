@@ -31,4 +31,5 @@ data class DayteskData(
     val weeklyReview: List<String> = emptyList(),
     val otrasPendientes: List<Tarea> = emptyList(),
     val vencidas: List<Tarea> = emptyList(),
+    val historial: List<Tarea> = emptyList(),
 )

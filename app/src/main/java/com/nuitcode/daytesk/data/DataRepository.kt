@@ -37,13 +37,20 @@ class DefaultDataRepository(
             tarea.copy(contexto = resolved)
         }
 
-        val completadas = tareas
-            .filter { it.estado == TareaEstado.COMPLETADA }
-            .sortedByDescending { it.fechaCompletada ?: it.fechaCreacion }
-        val pendientes = tareas.filter { it.estado != TareaEstado.COMPLETADA }
+        val now = System.currentTimeMillis()
+        val enHistorial = { tarea: Tarea ->
+            tarea.estado == TareaEstado.COMPLETADA ||
+                tarea.estado == TareaEstado.VENCIDA ||
+                (tarea.fechaVencimiento != null && tarea.fechaVencimiento <= now)
+        }
+        val historial = tareas
+            .filter(enHistorial)
+            .sortedByDescending { it.fechaVencimiento ?: it.fechaCompletada ?: it.fechaCreacion }
+        val completadas = historial.filter { it.estado == TareaEstado.COMPLETADA }
+        val vencidas = historial.filter { it.estado != TareaEstado.COMPLETADA }
+        val pendientes = tareas.filterNot(enHistorial)
         val hoy = pendientes.filter { esHoy(it) }
         val semana = pendientes.filter { !esHoy(it) && esEstaSemana(it) }
-        val vencidas = pendientes.filter { estaVencida(it) }
         val otras = pendientes.filter { !esHoy(it) && !esEstaSemana(it) }
         val racha = StreakCalculator.currentStreak(
             completadas.mapNotNull { it.fechaCompletada ?: it.fechaCreacion },
@@ -66,6 +73,7 @@ class DefaultDataRepository(
             weeklyReview = emptyList(),
             otrasPendientes = otras,
             vencidas = vencidas,
+            historial = historial,
         )
     }.catch { _ ->
         emit(
@@ -84,19 +92,9 @@ class DefaultDataRepository(
     private fun inboxItems(entities: List<InboxItemEntity>) =
         entities.map { it.toDomain() }
 
-    private fun estaVencida(tarea: Tarea): Boolean {
-        val venc = tarea.fechaVencimiento ?: return false
-        val startOfToday = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-        return venc < startOfToday.timeInMillis
-    }
-
     private fun esHoy(tarea: Tarea): Boolean {
         val venc = tarea.fechaVencimiento ?: return false
+        if (venc <= System.currentTimeMillis()) return false
         val cal = Calendar.getInstance().apply { timeInMillis = venc }
         val today = Calendar.getInstance()
         return cal.get(Calendar.YEAR) == today.get(Calendar.YEAR) &&
@@ -105,6 +103,7 @@ class DefaultDataRepository(
 
     private fun esEstaSemana(tarea: Tarea): Boolean {
         val venc = tarea.fechaVencimiento ?: return false
+        if (venc <= System.currentTimeMillis()) return false
         val cal = Calendar.getInstance().apply { timeInMillis = venc }
         val weekStart = Calendar.getInstance().apply {
             set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)

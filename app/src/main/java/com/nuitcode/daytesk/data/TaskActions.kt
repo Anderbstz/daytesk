@@ -49,3 +49,39 @@ fun Tarea.withCompletion(completed: Boolean): Tarea =
     }
 
 fun Tarea.touched(): Tarea = copy(updatedAt = System.currentTimeMillis())
+
+suspend fun archiveExpiredTasks(
+    context: Context,
+    tareaDao: TareaDao,
+    now: Long = System.currentTimeMillis(),
+) {
+    var changed = false
+    tareaDao.getAllOnce().forEach { entity ->
+        val due = entity.fechaVencimiento ?: return@forEach
+        if (due > now || entity.estado != TareaEstado.PENDIENTE.name) return@forEach
+        val archived = entity.copy(
+            estado = TareaEstado.VENCIDA.name,
+            updatedAt = now,
+        )
+        tareaDao.updateTarea(archived)
+        ReminderScheduler.cancelTaskReminder(context, entity.id)
+        val repeticion = runCatching { Repeticion.valueOf(entity.repeticion) }
+            .getOrDefault(Repeticion.NINGUNA)
+        if (repeticion != Repeticion.NINGUNA) {
+            val nextDue = repeticion.nextDue(due)
+            val next = entity.copy(
+                id = 0,
+                estado = TareaEstado.PENDIENTE.name,
+                fechaCompletada = null,
+                fechaCreacion = now,
+                fechaVencimiento = nextDue,
+                cloudKey = UUID.randomUUID().toString(),
+                updatedAt = now,
+            )
+            val id = tareaDao.insertTarea(next)
+            ReminderScheduler.scheduleIfDue(context, id, next.titulo, nextDue)
+        }
+        changed = true
+    }
+    if (changed) NextTaskWidgetProvider.refresh(context)
+}

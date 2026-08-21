@@ -591,6 +591,7 @@ private fun findTaskById(data: DayteskData, id: Long): Tarea? =
         ?: data.otrasPendientes.find { it.id == id }
         ?: data.vencidas.find { it.id == id }
         ?: data.completadas.find { it.id == id }
+        ?: data.historial.find { it.id == id }
 
 @Composable
 private fun DayteskBottomBar(

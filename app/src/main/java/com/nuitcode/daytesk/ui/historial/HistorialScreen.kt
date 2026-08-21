@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.data.DayteskData
 import com.nuitcode.daytesk.data.StreakCalculator
 import com.nuitcode.daytesk.model.Tarea
+import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -36,8 +37,10 @@ fun HistorialScreen(
     onBack: () -> Unit,
     onTaskClick: (Long) -> Unit = {},
 ) {
-    val grouped = data.completadas.groupBy { tarea ->
-        StreakCalculator.dayKey(tarea.fechaCompletada ?: tarea.fechaCreacion)
+    val grouped = data.historial.groupBy { tarea ->
+        StreakCalculator.dayKey(
+            tarea.fechaVencimiento ?: tarea.fechaCompletada ?: tarea.fechaCreacion,
+        )
     }.toList().sortedByDescending { it.first }
 
     Column(
@@ -67,7 +70,7 @@ fun HistorialScreen(
 
         if (grouped.isEmpty()) {
             Text(
-                text = "Aún no hay tareas completadas.",
+                text = "Aún no hay tareas en el historial.",
                 style = DayteskTypography.bodyMd,
                 color = DayteskColors.TextSecondary,
                 modifier = Modifier.padding(DayteskSpacing.xl),
@@ -78,7 +81,11 @@ fun HistorialScreen(
                 verticalArrangement = Arrangement.spacedBy(DayteskSpacing.md),
             ) {
                 grouped.forEach { (_, tareas) ->
-                    val label = formatDayLabel(tareas.first().fechaCompletada ?: tareas.first().fechaCreacion)
+                    val label = formatDayLabel(
+                        tareas.first().fechaVencimiento
+                            ?: tareas.first().fechaCompletada
+                            ?: tareas.first().fechaCreacion,
+                    )
                     item(key = "h-$label") {
                         Text(
                             text = label,
@@ -113,9 +120,13 @@ private fun HistorialRow(tarea: Tarea) {
                 color = DayteskColors.TextPrimary,
             )
             Text(
-                text = formatTime(tarea.fechaCompletada ?: tarea.fechaCreacion),
+                text = historialSubtitle(tarea),
                 style = DayteskTypography.caption,
-                color = DayteskColors.TextDisabled,
+                color = if (tarea.estado == TareaEstado.COMPLETADA) {
+                    DayteskColors.TextDisabled
+                } else {
+                    DayteskColors.Urgent
+                },
             )
         }
         ContextChip(contexto = tarea.contexto)
@@ -125,6 +136,17 @@ private fun HistorialRow(tarea: Tarea) {
 private fun formatDayLabel(millis: Long): String {
     val fmt = SimpleDateFormat("EEEE d MMM yyyy", Locale.forLanguageTag("es-ES"))
     return fmt.format(Date(millis)).replaceFirstChar { it.uppercase() }
+}
+
+private fun historialSubtitle(tarea: Tarea): String {
+    val whenText = formatTime(
+        tarea.fechaVencimiento ?: tarea.fechaCompletada ?: tarea.fechaCreacion,
+    )
+    return if (tarea.estado == TareaEstado.COMPLETADA) {
+        "Completada · $whenText"
+    } else {
+        "Vencida · $whenText"
+    }
 }
 
 private fun formatTime(millis: Long): String {

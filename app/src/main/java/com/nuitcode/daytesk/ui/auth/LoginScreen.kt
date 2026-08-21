@@ -53,10 +53,10 @@ fun LoginScreen(
     onLoggedIn: () -> Unit,
 ) {
     var registerMode by remember { mutableStateOf(false) }
-    var identifier by remember { mutableStateOf("ander") }
+    var identifier by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("12345678") }
+    var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
@@ -218,7 +218,7 @@ fun LoginScreen(
                 registerMode = !registerMode
                 error = null
                 showPassword = false
-                password = if (registerMode) "" else "12345678"
+                password = ""
             },
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -226,14 +226,6 @@ fun LoginScreen(
                 if (registerMode) "Ya tengo cuenta" else "Crear cuenta",
                 color = DayteskColors.Primary,
                 style = DayteskTypography.bodyMd,
-            )
-        }
-        if (!registerMode) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Usuario default: ander  ·  contraseña: 12345678",
-                style = DayteskTypography.caption,
-                color = DayteskColors.TextSecondary,
             )
         }
     }

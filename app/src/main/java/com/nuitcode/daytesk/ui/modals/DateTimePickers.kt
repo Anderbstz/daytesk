@@ -12,11 +12,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.window.Dialog
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
@@ -65,6 +67,7 @@ fun DayteskTimePickerDialog(
     val timeState = rememberTimePickerState(
         initialHour = now.get(Calendar.HOUR_OF_DAY),
         initialMinute = now.get(Calendar.MINUTE),
+        is24Hour = true,
     )
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -72,7 +75,10 @@ fun DayteskTimePickerDialog(
             color = DayteskColors.Surface,
         ) {
             Column(Modifier.padding(DayteskSpacing.lg)) {
-                TimePicker(state = timeState)
+                TimePicker(
+                    state = timeState,
+                    colors = dayteskTimePickerColors(),
+                )
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -90,6 +96,25 @@ fun DayteskTimePickerDialog(
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun dayteskTimePickerColors() = TimePickerDefaults.colors(
+    clockDialColor = DayteskColors.PrimaryLight,
+    selectorColor = DayteskColors.Primary,
+    containerColor = DayteskColors.Surface,
+    clockDialSelectedContentColor = Color.White,
+    clockDialUnselectedContentColor = DayteskColors.TextPrimary,
+    periodSelectorBorderColor = DayteskColors.Border,
+    periodSelectorSelectedContainerColor = DayteskColors.Primary,
+    periodSelectorUnselectedContainerColor = DayteskColors.PrimaryLight,
+    periodSelectorSelectedContentColor = Color.White,
+    periodSelectorUnselectedContentColor = DayteskColors.TextPrimary,
+    timeSelectorSelectedContainerColor = DayteskColors.Primary,
+    timeSelectorUnselectedContainerColor = DayteskColors.Background,
+    timeSelectorSelectedContentColor = Color.White,
+    timeSelectorUnselectedContentColor = DayteskColors.TextPrimary,
+)
 
 fun combineUtcDateWithLocalTime(utcDateMillis: Long, hour: Int, minute: Int): Long {
     val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {

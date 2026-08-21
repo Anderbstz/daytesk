@@ -32,9 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,7 +47,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Prioridad
 import com.nuitcode.daytesk.model.Repeticion
@@ -60,10 +57,8 @@ import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.TimeZone
 import androidx.compose.ui.graphics.SolidColor
 
 
@@ -419,58 +414,19 @@ fun NuevaTareaModal(
         }
     }
 
-    // ── Time picker dialog (M3 has no TimePickerDialog; wrap manually) ─
     if (showTimePicker && pendingDateMillis != null) {
-        val now = remember { Calendar.getInstance() }
-        val timeState = rememberTimePickerState(
-            initialHour = now.get(Calendar.HOUR_OF_DAY),
-            initialMinute = now.get(Calendar.MINUTE),
-        )
-        Dialog(
-            onDismissRequest = {
+        DayteskTimePickerDialog(
+            utcDateMillis = pendingDateMillis!!,
+            onDismiss = {
                 showTimePicker = false
                 pendingDateMillis = null
             },
-        ) {
-            Surface(
-                shape = DayteskShapes.small,
-                color = DayteskColors.Surface,
-            ) {
-                Column(Modifier.padding(DayteskSpacing.lg)) {
-                    TimePicker(state = timeState)
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = {
-                            showTimePicker = false
-                            pendingDateMillis = null
-                        }) {
-                            Text("Cancelar")
-                        }
-                        TextButton(onClick = {
-                            val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-                                timeInMillis = pendingDateMillis!!
-                            }
-                            val cal = Calendar.getInstance().apply {
-                                set(Calendar.YEAR, utc.get(Calendar.YEAR))
-                                set(Calendar.MONTH, utc.get(Calendar.MONTH))
-                                set(Calendar.DAY_OF_MONTH, utc.get(Calendar.DAY_OF_MONTH))
-                                set(Calendar.HOUR_OF_DAY, timeState.hour)
-                                set(Calendar.MINUTE, timeState.minute)
-                                set(Calendar.SECOND, 0)
-                                set(Calendar.MILLISECOND, 0)
-                            }
-                            fechaVencimiento = cal.timeInMillis
-                            showTimePicker = false
-                            pendingDateMillis = null
-                        }) {
-                            Text("OK")
-                        }
-                    }
-                }
-            }
-        }
+            onConfirm = { millis ->
+                fechaVencimiento = millis
+                showTimePicker = false
+                pendingDateMillis = null
+            },
+        )
     }
 }
 

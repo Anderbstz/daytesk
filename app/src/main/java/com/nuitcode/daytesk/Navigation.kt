@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -57,6 +57,7 @@ import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.InboxItemDao
 import com.nuitcode.daytesk.data.local.TareaDao
 import com.nuitcode.daytesk.data.local.toEntity
+import com.nuitcode.daytesk.data.archiveExpiredTasks
 import com.nuitcode.daytesk.data.persistTaskCompletion
 import com.nuitcode.daytesk.model.InboxItem
 import com.nuitcode.daytesk.model.Tarea
@@ -148,6 +149,7 @@ fun DayteskApp(
             cachedData = state.data
             LaunchedEffect(state.data, syncReady) {
                 if (!syncReady) return@LaunchedEffect
+                archiveExpiredTasks(context, tareaDao)
                 ReminderScheduler.reschedulePending(
                     context,
                     state.data.tareasHoy + state.data.tareasSemana +
@@ -234,6 +236,7 @@ fun DayteskApp(
                 scope.launch {
                     ReminderScheduler.cancelTaskReminder(context, tarea.id)
                     tareaDao.deleteTarea(tarea.toEntity())
+                    NextTaskWidgetProvider.refresh(context)
                     detalleTareaSeleccionada = null
                 }
             },
@@ -595,20 +598,20 @@ private fun DayteskBottomBar(
     onTabSelected: (NavKey) -> Unit,
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars),
+        modifier = Modifier.fillMaxWidth(),
         color = Color.White,
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(72.dp)
-                .padding(horizontal = DayteskSpacing.sm),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(72.dp)
+                    .padding(horizontal = DayteskSpacing.sm),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             tabs.forEach { tab ->
                 val isSelected = currentEntry?.javaClass == tab.key.javaClass
                 Column(
@@ -641,6 +644,8 @@ private fun DayteskBottomBar(
                     )
                 }
             }
+            }
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 }

@@ -1,0 +1,52 @@
+# Excluye del build context cualquier cosa que no sea el server JVM.
+# Render envía todo el repo → sin esto, docker build() es lento y se rompe
+# por local.properties, .gradle, etc.
+
+# --- Control de versiones y generados ---
+.git/
+.gitignore
+.gitattributes
+
+# --- Gradle / Kotlin build cache ---
+.gradle/
+.kotlin/
+**/.gradle/
+**/.kotlin/
+
+# --- Outputs de build (de TODOS los módulos) ---
+build/
+**/build/
+
+# --- Android Studio / IntelliJ ---
+.idea/
+*.iml
+*.iws
+*.ipr
+captures/
+.cxx/
+
+# --- Secretos y config local NUNCA van al container ---
+local.properties
+**/*.jks
+**/*.keystore
+**/*.keystore.properties
+.env
+env/.env
+**/secrets/
+
+# --- Tooling / artefactos de IA / specs ---
+.codegraph/
+.atl/
+openspec/
+
+# --- Assets de producto (branding y htmls de marketing) ---
+branding/
+htmls/
+
+# --- El propio Dockerfile no debe estar dentro ---
+Dockerfile
+.dockerignore
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db

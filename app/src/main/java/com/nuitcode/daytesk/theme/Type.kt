@@ -53,6 +53,10 @@ object DayteskTypography {
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
     )
+    val statsNumber = TextStyle(
+        fontWeight = FontWeight.Bold,
+        fontSize = 24.sp,
+    )
 }
 
 // M3 Typography mapping using Daytesk styles

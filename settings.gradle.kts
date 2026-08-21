@@ -31,3 +31,4 @@ plugins {
 
 rootProject.name = "Daytesk"
 include(":app")
+include(":server")

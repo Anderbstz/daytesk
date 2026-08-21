@@ -1,6 +1,7 @@
 package com.nuitcode.daytesk.data
 
 import com.nuitcode.daytesk.model.Alerta
+import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.InboxItem
 import com.nuitcode.daytesk.model.Tarea
 
@@ -20,5 +21,15 @@ data class DayteskData(
     val completadas: List<Tarea>,
     val inbox: List<InboxItem>,
     val alertas: List<Alerta>,
+    /**
+     * User-managed contexts in display order (orden ASC). Populated by
+     * [DefaultDataRepository.data] from the `contextos` table.
+     * Default 4 seeds (CASA/TRABAJO/PERSONAL/SALUD) are always present on a
+     * healthy DB; custom contexts appear here too after the user adds them.
+     */
+    val contextos: List<Contexto> = emptyList(),
     val weeklyReview: List<String> = emptyList(),
+    val otrasPendientes: List<Tarea> = emptyList(),
+    val vencidas: List<Tarea> = emptyList(),
+    val historial: List<Tarea> = emptyList(),
 )

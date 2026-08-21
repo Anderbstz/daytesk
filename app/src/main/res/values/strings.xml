@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Daytesk</string>
+    <string name="widget_description">Muestra la próxima tarea importante en la pantalla de inicio.</string>
 </resources>

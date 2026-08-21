@@ -41,12 +41,10 @@ fun InicioScreen(
 ) {
     val pendingToday = data.tareasHoy.filter { it.estado == TareaEstado.PENDIENTE }
     val dueTodayTasks = pendingToday
-    val importantNow = ImportantNow.pick(
-        data.tareasHoy + data.tareasSemana + data.otrasPendientes,
-    )
     val allPending = (data.tareasHoy + data.tareasSemana + data.otrasPendientes + data.vencidas)
         .distinctBy { it.id }
         .filter { it.estado == TareaEstado.PENDIENTE }
+    val importantNow = ImportantNow.pick(allPending)
     val recientes = recentPendingTasks(allPending)
     val pinned = plugins.pinnedIds.mapNotNull { id -> allPending.find { it.id == id } }
     var showPluginPicker by remember { mutableStateOf(false) }

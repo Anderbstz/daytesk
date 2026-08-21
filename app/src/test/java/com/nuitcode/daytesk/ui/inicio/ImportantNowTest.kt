@@ -26,7 +26,7 @@ class ImportantNowTest {
     }
 
     @Test
-    fun pick_prefersOverdueClosestToToday() {
+    fun pick_skipsTasksPastDueInstant() {
         val now = date(2026, Calendar.AUGUST, 17)
         val tasks = listOf(
             task(1, date(2026, Calendar.AUGUST, 15)),
@@ -37,7 +37,35 @@ class ImportantNowTest {
 
         val picked = ImportantNow.pick(tasks, nowMillis = now)
 
-        assertEquals(listOf(2L, 1L, 3L), picked.map { it.id })
+        assertEquals(listOf(3L, 4L), picked.map { it.id })
+    }
+
+    @Test
+    fun pick_includesUndatedAfterUpcoming() {
+        val now = date(2026, Calendar.AUGUST, 17)
+        val tasks = listOf(
+            task(1, date(2026, Calendar.AUGUST, 18)),
+            Tarea(id = 9, titulo = "Dataset", estado = TareaEstado.PENDIENTE, fechaVencimiento = null),
+        )
+        val picked = ImportantNow.pick(tasks, nowMillis = now)
+        assertEquals(listOf(1L, 9L), picked.map { it.id })
+    }
+
+    @Test
+    fun timeProgress_isHundredAtDueInstant() {
+        val created = date(2026, Calendar.AUGUST, 17)
+        val due = date(2026, Calendar.AUGUST, 18)
+        assertEquals(0, ImportantNow.timeProgress(created, due, created))
+        assertEquals(100, ImportantNow.timeProgress(created, due, due))
+    }
+
+    @Test
+    fun timeProgress_usesWholeMinutes() {
+        val created = 1_000_000L
+        val due = created + 24 * 60 * 60_000L
+        val twelveHours = created + 12 * 60 * 60_000L
+        assertEquals(50, ImportantNow.timeProgress(created, due, twelveHours))
+        assertEquals(0, ImportantNow.timeProgress(created, due, created + 30_000L))
     }
 
     private fun task(id: Long, due: Long) = Tarea(

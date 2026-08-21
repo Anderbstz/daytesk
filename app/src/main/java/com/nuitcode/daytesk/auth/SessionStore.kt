@@ -19,15 +19,29 @@ class SessionStore(context: Context) {
         get() = prefs.getString(KEY_EMAIL, "") ?: ""
         private set(value) { prefs.edit().putString(KEY_EMAIL, value).apply() }
 
-    fun save(token: String, displayName: String, email: String, newAccount: Boolean = false) {
+    val hadPreviousAccount: Boolean
+        get() = prefs.getBoolean(KEY_HAD_ACCOUNT, false)
+
+    fun save(
+        token: String,
+        displayName: String,
+        email: String,
+        newAccount: Boolean = false,
+        keepLocal: Boolean = false,
+    ) {
         val previous = prefs.getString(KEY_EMAIL, null)
+            ?: prefs.getString(KEY_PREVIOUS_EMAIL, null)
         val switched = previous != null && !previous.equals(email, ignoreCase = true)
+        val wipe = !keepLocal && (newAccount || switched)
         prefs.edit()
             .putString(KEY_TOKEN, token)
             .putString(KEY_NAME, displayName)
             .putString(KEY_EMAIL, email)
+            .remove(KEY_PREVIOUS_EMAIL)
             .putBoolean(KEY_NEEDS_PULL, true)
-            .putBoolean(KEY_WIPE_LOCAL, newAccount || switched)
+            .putBoolean(KEY_WIPE_LOCAL, wipe)
+            .putBoolean(KEY_KEEP_LOCAL, keepLocal)
+            .putBoolean(KEY_HAD_ACCOUNT, true)
             .apply()
         applyToUser()
     }
@@ -40,6 +54,14 @@ class SessionStore(context: Context) {
         return needsPull
     }
 
+    fun consumeKeepLocal(): Boolean {
+        val keep = prefs.getBoolean(KEY_KEEP_LOCAL, false)
+        if (keep) {
+            prefs.edit().putBoolean(KEY_KEEP_LOCAL, false).apply()
+        }
+        return keep
+    }
+
     fun consumeWipeLocal(): Boolean {
         val wipe = prefs.getBoolean(KEY_WIPE_LOCAL, false)
         if (wipe) {
@@ -49,7 +71,15 @@ class SessionStore(context: Context) {
     }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        val hadAccount = hadPreviousAccount || isLoggedIn
+        val previousEmail = prefs.getString(KEY_EMAIL, null)
+        prefs.edit()
+            .clear()
+            .putBoolean(KEY_HAD_ACCOUNT, hadAccount)
+            .apply()
+        if (!previousEmail.isNullOrBlank()) {
+            prefs.edit().putString(KEY_PREVIOUS_EMAIL, previousEmail).apply()
+        }
         applyToUser()
     }
 
@@ -65,5 +95,8 @@ class SessionStore(context: Context) {
         private const val KEY_EMAIL = "email"
         private const val KEY_NEEDS_PULL = "needs_pull"
         private const val KEY_WIPE_LOCAL = "wipe_local"
+        private const val KEY_KEEP_LOCAL = "keep_local"
+        private const val KEY_HAD_ACCOUNT = "had_account"
+        private const val KEY_PREVIOUS_EMAIL = "previous_email"
     }
 }

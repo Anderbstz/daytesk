@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.nuitcode.daytesk.auth.SessionStore
+import com.nuitcode.daytesk.sync.CloudSync
 import com.nuitcode.daytesk.theme.DayteskTheme
 import com.nuitcode.daytesk.ui.auth.LoginScreen
 
@@ -25,12 +26,14 @@ class MainActivity : ComponentActivity() {
                 if (!loggedIn) {
                     LoginScreen(
                         sessionStore = sessionStore,
+                        database = app.database,
                         onLoggedIn = { loggedIn = true },
                     )
                 } else {
                     DayteskApp(
                         database = app.database,
                         onLogout = {
+                            CloudSync.cancelScheduled()
                             sessionStore.clear()
                             loggedIn = false
                         },

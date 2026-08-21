@@ -246,6 +246,12 @@ private fun SettingsList(
         )
         SettingsDivider()
         SettingsRow(
+            icon = { FolderIcon() },
+            text = "Crear otra cuenta",
+            onClick = onClearLocalData,
+        )
+        SettingsDivider()
+        SettingsRow(
             icon = { LogoutIcon() },
             text = "Cerrar sesión",
             textColor = DayteskColors.Urgent,

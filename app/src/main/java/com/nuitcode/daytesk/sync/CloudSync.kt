@@ -3,6 +3,7 @@ package com.nuitcode.daytesk.sync
 import android.content.Context
 import com.nuitcode.daytesk.auth.AuthApi
 import com.nuitcode.daytesk.auth.SessionStore
+import com.nuitcode.daytesk.data.local.ContextoSeed
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.ContextoEntity
 import com.nuitcode.daytesk.data.local.InboxItemEntity
@@ -28,9 +29,7 @@ class CloudSync(
     suspend fun onStart() {
         val token = sessionStore.token ?: return
         mutex.withLock {
-            if (sessionStore.consumeNeedsPull()) {
-                runCatching { pullOrPushLocked(token) }
-            }
+            runCatching { pullOrPushLocked(token) }
         }
         NextTaskWidgetProvider.refresh(context)
     }
@@ -53,20 +52,67 @@ class CloudSync(
                 sync.pushNow()
             }
         }
+
+        fun cancelScheduled() {
+            debounceJob?.cancel()
+            debounceJob = null
+        }
+
+        private val SAMPLE_TASK_TITLES = setOf(
+            "Llamar al dentista",
+            "Informe trimestral",
+            "Sacar la basura",
+            "Limpiar el garaje",
+            "Leer un libro",
+            "Comprar regalo cumpleaños",
+        )
+        private val SAMPLE_INBOX = setOf(
+            "Revisar correo del banco",
+            "Buscar vuelos para vacaciones",
+            "Comprar nuevo monitor",
+            "Llamar al seguro médico",
+            "Actualizar CV",
+        )
     }
 
     private suspend fun pullOrPushLocked(token: String) {
-        val remote = AuthApi.pullSync(token).getOrThrow()
-        if (remote.isEmpty()) {
-            if (sessionStore.consumeWipeLocal()) {
-                database.tareaDao().deleteAll()
-                database.inboxItemDao().deleteAll()
-            }
+        val wipe = sessionStore.consumeWipeLocal()
+        val keepLocal = sessionStore.consumeKeepLocal()
+        sessionStore.consumeNeedsPull()
+        val remote = stripLegacySamples(AuthApi.pullSync(token).getOrThrow())
+        val remoteHasUserContent = remote.tareas.isNotEmpty() || remote.inbox.isNotEmpty()
+
+        if (keepLocal && !remoteHasUserContent) {
+            ensureDefaultContextos()
             pushLocked(token)
-        } else {
-            sessionStore.consumeWipeLocal()
-            applyLocked(remote)
+            return
         }
+
+        if (wipe || !remoteHasUserContent) {
+            database.tareaDao().deleteAll()
+            database.inboxItemDao().deleteAll()
+            if (remote.contextos.isNotEmpty()) {
+                applyLocked(remote.copy(tareas = emptyList(), inbox = emptyList()))
+            }
+            ensureDefaultContextos()
+            pushLocked(token)
+            return
+        }
+
+        applyLocked(remote)
+        ensureDefaultContextos()
+    }
+
+    private fun stripLegacySamples(snapshot: AuthApi.SyncSnapshot): AuthApi.SyncSnapshot {
+        val tareas = snapshot.tareas.filterNot { it.titulo in SAMPLE_TASK_TITLES }
+        val inbox = snapshot.inbox.filterNot { it.texto in SAMPLE_INBOX }
+        return snapshot.copy(tareas = tareas, inbox = inbox)
+    }
+
+    private suspend fun ensureDefaultContextos() {
+        val dao = database.contextoDao()
+        if (dao.getAllOnce().isNotEmpty()) return
+        ContextoSeed.entries.forEach { seed -> dao.insert(seed.toEntity()) }
     }
 
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {

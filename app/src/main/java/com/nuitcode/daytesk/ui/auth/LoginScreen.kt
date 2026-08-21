@@ -14,8 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -28,12 +30,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.nuitcode.daytesk.R
 import com.nuitcode.daytesk.auth.AuthApi
 import com.nuitcode.daytesk.auth.SessionStore
+import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -44,6 +49,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun LoginScreen(
     sessionStore: SessionStore,
+    database: AppDatabase,
     onLoggedIn: () -> Unit,
 ) {
     var registerMode by remember { mutableStateOf(false) }
@@ -54,6 +60,7 @@ fun LoginScreen(
     var showPassword by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(false) }
+    var pendingSession by remember { mutableStateOf<AuthApi.LoginResult?>(null) }
     val scope = rememberCoroutineScope()
 
     val canSubmit = if (registerMode) {
@@ -130,9 +137,12 @@ fun LoginScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
             trailingIcon = {
                 IconButton(onClick = { showPassword = !showPassword }) {
-                    Text(
-                        text = if (showPassword) "🙈" else "👁",
-                        style = DayteskTypography.bodyMd,
+                    Icon(
+                        painter = painterResource(
+                            if (showPassword) R.drawable.ic_visibility_off else R.drawable.ic_visibility,
+                        ),
+                        contentDescription = if (showPassword) "Ocultar contraseña" else "Mostrar contraseña",
+                        tint = DayteskColors.Primary,
                     )
                 }
             },
@@ -160,8 +170,25 @@ fun LoginScreen(
                     }
                     loading = false
                     result.onSuccess { session ->
-                        sessionStore.save(session.token, session.displayName, session.email, newAccount = registerMode)
-                        onLoggedIn()
+                        val askTransfer = registerMode && sessionStore.hadPreviousAccount
+                        if (askTransfer) {
+                            pendingSession = session
+                        } else {
+                            if (registerMode) {
+                                withContext(Dispatchers.IO) {
+                                    database.tareaDao().deleteAll()
+                                    database.inboxItemDao().deleteAll()
+                                }
+                            }
+                            sessionStore.save(
+                                session.token,
+                                session.displayName,
+                                session.email,
+                                newAccount = registerMode,
+                                keepLocal = false,
+                            )
+                            onLoggedIn()
+                        }
                     }.onFailure { failure ->
                         error = failure.message ?: "No se pudo continuar."
                     }
@@ -209,6 +236,55 @@ fun LoginScreen(
                 color = DayteskColors.TextSecondary,
             )
         }
+    }
+    pendingSession?.let { session ->
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Pasar tareas") },
+            text = {
+                Text("¿Querés pasar las tareas de tu cuenta anterior a esta cuenta nueva?")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        sessionStore.save(
+                            session.token,
+                            session.displayName,
+                            session.email,
+                            newAccount = true,
+                            keepLocal = true,
+                        )
+                        pendingSession = null
+                        onLoggedIn()
+                    },
+                ) {
+                    Text("Sí, pasarlas")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                database.tareaDao().deleteAll()
+                                database.inboxItemDao().deleteAll()
+                            }
+                            sessionStore.save(
+                                session.token,
+                                session.displayName,
+                                session.email,
+                                newAccount = true,
+                                keepLocal = false,
+                            )
+                            pendingSession = null
+                            onLoggedIn()
+                        }
+                    },
+                ) {
+                    Text("No, empezar vacío")
+                }
+            },
+        )
     }
 }
 

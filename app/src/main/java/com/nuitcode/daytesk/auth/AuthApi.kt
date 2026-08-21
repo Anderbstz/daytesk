@@ -105,38 +105,74 @@ object AuthApi {
         token: String?,
         body: JSONObject? = null,
     ): Result<String> {
-        return runCatching {
-            val connection = (URL("$BASE_URL$path").openConnection() as HttpURLConnection).apply {
-                requestMethod = method
-                connectTimeout = 45_000
-                readTimeout = 45_000
-                if (!token.isNullOrBlank()) {
-                    setRequestProperty("Authorization", "Bearer $token")
-                }
-                if (body != null) {
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/json")
-                    outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-                }
+        var lastError: Throwable? = null
+        repeat(4) { attempt ->
+            val attemptResult = runCatching { once(method, path, token, body) }
+            val text = attemptResult.getOrNull()
+            if (attemptResult.isSuccess && text != null && looksLikeJson(text)) {
+                return Result.success(text)
             }
-            val code = connection.responseCode
-            val text = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()
-                ?.use { it.readText() }
-                .orEmpty()
-            if (code !in 200..299) {
-                val message = runCatching { JSONObject(text).optString("error") }.getOrNull()
-                    ?.takeIf { it.isNotBlank() }
-                    ?: "El servidor respondió $code."
-                error(message)
+            lastError = attemptResult.exceptionOrNull() ?: IllegalStateException(
+                "El servidor está despertando. Esperá unos segundos y volvé a entrar.",
+            )
+            val retryable = lastError is java.net.ConnectException ||
+                lastError is java.net.SocketTimeoutException ||
+                lastError?.message?.contains("despertando") == true ||
+                lastError?.message?.contains("503") == true ||
+                lastError?.message?.contains("502") == true ||
+                lastError?.message?.contains("504") == true ||
+                (attemptResult.isSuccess && text != null && !looksLikeJson(text))
+            if (!retryable || attempt == 3) {
+                return Result.failure(
+                    lastError ?: IllegalStateException("No se pudo conectar al servidor."),
+                )
             }
-            text
-        }.recoverCatching { failure ->
-            if (failure is java.net.ConnectException || failure is java.net.SocketTimeoutException) {
-                error("No se pudo conectar al servidor. Arrancá `:server:run` y revisá env/.env.")
-            }
-            throw failure
+            Thread.sleep(8_000L * (attempt + 1))
         }
+        return Result.failure(lastError ?: IllegalStateException("No se pudo conectar al servidor."))
+    }
+
+    private fun once(
+        method: String,
+        path: String,
+        token: String?,
+        body: JSONObject?,
+    ): String {
+        val connection = (URL("$BASE_URL$path").openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = 60_000
+            readTimeout = 60_000
+            instanceFollowRedirects = true
+            if (!token.isNullOrBlank()) {
+                setRequestProperty("Authorization", "Bearer $token")
+            }
+            setRequestProperty("Accept", "application/json")
+            if (body != null) {
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json")
+                outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            }
+        }
+        val code = connection.responseCode
+        val text = (if (code in 200..299) connection.inputStream else connection.errorStream)
+            ?.bufferedReader()
+            ?.use { it.readText() }
+            .orEmpty()
+        if (!looksLikeJson(text) || code == 502 || code == 503 || code == 504) {
+            error("El servidor está despertando. Esperá unos segundos y volvé a entrar.")
+        }
+        if (code !in 200..299) {
+            val message = runCatching { JSONObject(text).optString("error") }.getOrNull()
+                ?.takeIf { it.isNotBlank() }
+                ?: "El servidor respondió $code."
+            error(message)
+        }
+        return text
+    }
+
+    private fun looksLikeJson(text: String): Boolean {
+        val trimmed = text.trim()
+        return trimmed.startsWith("{") || trimmed.startsWith("[")
     }
 
     private fun parseSnapshot(json: JSONObject): SyncSnapshot {

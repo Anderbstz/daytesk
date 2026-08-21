@@ -12,7 +12,7 @@ android {
         applicationId = "com.nuitcode.daytesk"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
+        versionCode = 9
         versionName = "1.0"
     }
 

@@ -100,6 +100,47 @@ object Migrations {
             db.execSQL("ALTER TABLE `contextos` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
         }
     }
+
+    /**
+     * Canonical DDL for the `recordatorios` table.
+     *
+     * Exposed as a literal so [MIGRATION_4_5] and `MigrationTest` execute the
+     * exact same statement — the test can never drift from production DDL.
+     *
+     * Column order mirrors [RecordatorioEntity]'s declaration order so the
+     * generated Room schema matches this statement byte-for-byte.
+     */
+    const val CREATE_RECORDATORIOS_DDL: String =
+        "CREATE TABLE IF NOT EXISTS `recordatorios` (" +
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`texto` TEXT NOT NULL, " +
+            "`fecha` INTEGER NOT NULL, " +
+            "`repeticion` TEXT NOT NULL, " +
+            "`cloudKey` TEXT NOT NULL, " +
+            "`updatedAt` INTEGER NOT NULL, " +
+            "`fechaCreacion` INTEGER NOT NULL)"
+
+    /**
+     * **MIGRATION_4_5** — introduces the `recordatorios` table.
+     *
+     * NOTE: the `inbox_items` drop that the design associates with this
+     * migration is deliberately deferred to the inbox-removal slice (PR3).
+     * `InboxItemEntity` is still part of [AppDatabase.entities] until then, so
+     * dropping its table here would fail Room's on-open schema validation
+     * (`IllegalStateException`) on an upgraded v4 database. The table is
+     * removed together with the Inbox entity/DAO in PR3.
+     */
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL(CREATE_RECORDATORIOS_DDL)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
 }
 
 /**

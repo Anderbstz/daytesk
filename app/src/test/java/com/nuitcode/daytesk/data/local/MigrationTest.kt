@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -36,6 +37,8 @@ class MigrationTest {
         db = context.openOrCreateDatabase("migration-test.db", android.content.Context.MODE_PRIVATE, null)
         db.execSQL("DROP TABLE IF EXISTS tareas")
         db.execSQL("DROP TABLE IF EXISTS contextos")
+        db.execSQL("DROP TABLE IF EXISTS recordatorios")
+        db.execSQL("DROP TABLE IF EXISTS inbox_items")
 
         // v1 schema (TareaEntity before PR1)
         db.execSQL(
@@ -59,6 +62,8 @@ class MigrationTest {
     fun tearDown() {
         db.execSQL("DROP TABLE IF EXISTS tareas")
         db.execSQL("DROP TABLE IF EXISTS contextos")
+        db.execSQL("DROP TABLE IF EXISTS recordatorios")
+        db.execSQL("DROP TABLE IF EXISTS inbox_items")
         db.close()
     }
 
@@ -204,6 +209,68 @@ class MigrationTest {
         db.rawQuery("SELECT COUNT(*) FROM tareas WHERE contextoId = 0", null).use { c ->
             c.moveToFirst()
             assertEquals(0, c.getInt(0))
+        }
+    }
+
+    /**
+     * Strict TDD — RED test written before [Migrations.MIGRATION_4_5] and
+     * [Migrations.CREATE_RECORDATORIOS_DDL] exist.
+     *
+     * MIGRATION_4_5 contract (see sdd/quick-reminders/design):
+     *   1. CREATE TABLE `recordatorios` (id, texto, fecha, repeticion, cloudKey, updatedAt, fechaCreacion)
+     *
+     * The CREATE statement is the shared [Migrations.CREATE_RECORDATORIOS_DDL]
+     * literal that the migration itself executes, so the test can never drift
+     * from production DDL.
+     *
+     * The `inbox_items` DROP that the design bundles into MIGRATION_4_5 is
+     * deliberately deferred to the inbox-removal slice (PR3): `InboxItemEntity`
+     * stays in `AppDatabase.entities` until then, so dropping its table here
+     * would break Room's on-open schema validation on an upgraded database.
+     * This test pins that deliberate deferral.
+     */
+    @Test
+    fun migration_v4ToV5_createsRecordatoriosAndKeepsInboxUntilPr3() {
+        // v4 leftover: the inbox table still owned by InboxItemEntity.
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS inbox_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                texto TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                procesado INTEGER NOT NULL,
+                cloudKey TEXT NOT NULL DEFAULT '',
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("INSERT INTO inbox_items (texto, timestamp, procesado) VALUES ('legacy', 1, 0)")
+
+        // Apply the MIGRATION_4_5 SQL exactly as the migration runs it.
+        db.beginTransaction()
+        try {
+            db.execSQL(Migrations.CREATE_RECORDATORIOS_DDL)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        // recordatorios exists with the expected columns, in order.
+        db.rawQuery("PRAGMA table_info(recordatorios)", null).use { c ->
+            val columns = mutableListOf<String>()
+            while (c.moveToNext()) columns.add(c.getString(c.getColumnIndexOrThrow("name")))
+            assertEquals(
+                listOf("id", "texto", "fecha", "repeticion", "cloudKey", "updatedAt", "fechaCreacion"),
+                columns,
+            )
+        }
+        db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'recordatorios'", null).use { c ->
+            assertTrue("recordatorios must exist after MIGRATION_4_5", c.moveToFirst())
+        }
+
+        // inbox_items is intentionally still present; its removal ships with PR3.
+        db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'", null).use { c ->
+            assertTrue("inbox_items is dropped in PR3, not by MIGRATION_4_5", c.moveToFirst())
         }
     }
 }

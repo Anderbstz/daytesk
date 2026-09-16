@@ -20,7 +20,7 @@ import com.nuitcode.daytesk.model.TareaEstado
  * The `contexto: Contexto` field on the domain [Tarea] is no longer filled by
  * [toDomain] — resolution happens in
  * [com.nuitcode.daytesk.data.DefaultDataRepository.data] via the 3-way
- * `combine` over tareas + inbox + contextos.
+ * `combine` over tareas + recordatorios + contextos.
  */
 @Entity(tableName = "tareas")
 data class TareaEntity(

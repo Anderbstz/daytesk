@@ -45,7 +45,7 @@ class MainScreenViewModelTest {
         val success = state as DayteskUiState.Success
         assertEquals(3, success.data.stats.tareasHoy)
         assertEquals(6, success.data.tareasHoy.size + success.data.tareasSemana.size + success.data.completadas.size)
-        assertEquals(5, success.data.inbox.size)
+        assertEquals(5, success.data.recordatorios.size)
     }
 
     @Test
@@ -58,8 +58,8 @@ class MainScreenViewModelTest {
     /**
      * PR3 — assert that the `contextos` field on `DayteskData` is propagated
      * through the ViewModel's `Success` state. Mirrors the runtime contract of
-     * `DefaultDataRepository.data` (3-way `combine` over tareas, inbox, and
-     * contextos) and confirms the ViewModel does not drop the new field.
+     * `DefaultDataRepository.data` (3-way `combine` over tareas, recordatorios,
+     * and contextos) and confirms the ViewModel does not drop the new field.
      *
      * RED at write-time: no test asserted this before PR3; the production
      * code path was implicit in the 3-way `combine` added in PR1. Static
@@ -101,7 +101,7 @@ private class FakeDayteskRepository : DataRepository {
                 tareasHoy = MockData.tareasHoy,
                 tareasSemana = MockData.tareasSemana,
                 completadas = MockData.completadas,
-                inbox = MockData.inboxItems,
+                recordatorios = MockData.recordatorios,
                 alertas = MockData.alertas,
                 weeklyReview = MockData.weeklyReview,
             )
@@ -121,7 +121,7 @@ private class FakeDayteskRepositoryWithContextos : DataRepository {
                 tareasHoy = MockData.tareasHoy,
                 tareasSemana = MockData.tareasSemana,
                 completadas = MockData.completadas,
-                inbox = MockData.inboxItems,
+                recordatorios = MockData.recordatorios,
                 alertas = MockData.alertas,
                 weeklyReview = MockData.weeklyReview,
                 contextos = Contexto.DEFAULTS,

@@ -44,7 +44,7 @@ fun AyudaScreen(onBack: () -> Unit) {
         }
         Column(modifier = Modifier.padding(horizontal = DayteskSpacing.xl)) {
             Text(
-                "Captura ideas en Inbox, conviértelas en tareas y márcalas al terminar. La racha cuenta días seguidos con al menos una tarea completada.",
+                "Agendá recordatorios con fecha y repetición, convertí lo pendiente en tareas y marcalas al terminar. La racha cuenta días seguidos con al menos una tarea completada.",
                 style = DayteskTypography.bodyMd,
                 color = DayteskColors.TextSecondary,
             )

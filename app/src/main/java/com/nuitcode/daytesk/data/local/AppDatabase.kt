@@ -10,14 +10,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [TareaEntity::class, RecordatorioEntity::class, InboxItemEntity::class, ContextoEntity::class],
+    entities = [TareaEntity::class, RecordatorioEntity::class, ContextoEntity::class],
     version = 5,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun tareaDao(): TareaDao
     abstract fun recordatorioDao(): RecordatorioDao
-    abstract fun inboxItemDao(): InboxItemDao
     abstract fun contextoDao(): ContextoDao
 
     companion object {
@@ -56,8 +55,8 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * First-install path. Seeds the 4 default `contextos`. Tareas e inbox
-         * empiezan vacíos y se sincronizan con la cuenta.
+         * First-install path. Seeds the 4 default `contextos`. Tareas y
+         * recordatorios empiezan vacíos y se sincronizan con la cuenta.
          */
         private suspend fun populateDatabase(db: AppDatabase) {
             val contextoDao = db.contextoDao()
@@ -68,7 +67,7 @@ abstract class AppDatabase : RoomDatabase() {
                     contextoDao.insert(seed.toEntity())
                 }
             }
-            // Tareas e inbox empiezan vacíos; se sincronizan con la cuenta.
+            // Tareas y recordatorios empiezan vacíos; se sincronizan con la cuenta.
         }
     }
 }

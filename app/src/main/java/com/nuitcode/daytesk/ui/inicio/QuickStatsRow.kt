@@ -14,7 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -50,9 +50,9 @@ fun QuickStatsRow(stats: DayteskStats) {
             iconColor = DayteskColors.Primary,
         ),
         StatConfig(
-            icon = Icons.Default.Email,
-            label = "Inbox",
-            count = stats.inboxPendientes,
+            icon = Icons.Default.Notifications,
+            label = "Recordatorios",
+            count = stats.recordatoriosPendientes,
             subtitle = "pendientes",
             bgColor = DayteskColors.WarningLight,
             iconColor = DayteskColors.Warning,

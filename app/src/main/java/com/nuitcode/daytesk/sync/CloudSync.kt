@@ -6,7 +6,6 @@ import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.ContextoSeed
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.ContextoEntity
-import com.nuitcode.daytesk.data.local.InboxItemEntity
 import com.nuitcode.daytesk.data.local.TareaEntity
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
@@ -66,13 +65,6 @@ class CloudSync(
             "Leer un libro",
             "Comprar regalo cumpleaños",
         )
-        private val SAMPLE_INBOX = setOf(
-            "Revisar correo del banco",
-            "Buscar vuelos para vacaciones",
-            "Comprar nuevo monitor",
-            "Llamar al seguro médico",
-            "Actualizar CV",
-        )
     }
 
     private suspend fun pullOrPushLocked(token: String) {
@@ -80,7 +72,9 @@ class CloudSync(
         val keepLocal = sessionStore.consumeKeepLocal()
         sessionStore.consumeNeedsPull()
         val remote = stripLegacySamples(AuthApi.pullSync(token).getOrThrow())
-        val remoteHasUserContent = remote.tareas.isNotEmpty() || remote.inbox.isNotEmpty()
+        // Inbox was removed in the recordatorios slice; only tareas decide
+        // whether the remote account has user content now.
+        val remoteHasUserContent = remote.tareas.isNotEmpty()
 
         if (keepLocal && !remoteHasUserContent) {
             ensureDefaultContextos()
@@ -90,7 +84,6 @@ class CloudSync(
 
         if (wipe || !remoteHasUserContent) {
             database.tareaDao().deleteAll()
-            database.inboxItemDao().deleteAll()
             if (remote.contextos.isNotEmpty()) {
                 applyLocked(remote.copy(tareas = emptyList(), inbox = emptyList()))
             }
@@ -105,8 +98,9 @@ class CloudSync(
 
     private fun stripLegacySamples(snapshot: AuthApi.SyncSnapshot): AuthApi.SyncSnapshot {
         val tareas = snapshot.tareas.filterNot { it.titulo in SAMPLE_TASK_TITLES }
-        val inbox = snapshot.inbox.filterNot { it.texto in SAMPLE_INBOX }
-        return snapshot.copy(tareas = tareas, inbox = inbox)
+        // The Inbox payload is no longer consumed locally; drop it so a stale
+        // remote list can never resurface. PR5 replaces it with `recordatorios`.
+        return snapshot.copy(tareas = tareas, inbox = emptyList())
     }
 
     private suspend fun ensureDefaultContextos() {
@@ -118,9 +112,7 @@ class CloudSync(
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {
         val contextoDao = database.contextoDao()
         val tareaDao = database.tareaDao()
-        val inboxDao = database.inboxItemDao()
         tareaDao.deleteAll()
-        inboxDao.deleteAll()
         contextoDao.deleteAll()
         val keyToId = mutableMapOf<String, Long>()
         snapshot.contextos.sortedBy { it.orden }.forEach { item ->
@@ -159,24 +151,11 @@ class CloudSync(
                 ),
             )
         }
-        snapshot.inbox.forEach { item ->
-            inboxDao.insertItem(
-                InboxItemEntity(
-                    id = 0,
-                    texto = item.texto,
-                    timestamp = item.timestamp,
-                    procesado = item.procesado,
-                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                    updatedAt = item.updatedAt,
-                ),
-            )
-        }
     }
 
     private suspend fun pushLocked(token: String) {
         val contextos = database.contextoDao().getAllOnce()
         val tareas = database.tareaDao().getAllOnce()
-        val inbox = database.inboxItemDao().getAllOnce()
         val contextoKeyById = contextos.associate { entity ->
             entity.id to entity.cloudKey.ifBlank {
                 if (entity.id in 1L..4L) "default-${entity.id}" else UUID.randomUUID().toString()
@@ -212,15 +191,9 @@ class CloudSync(
                     updatedAt = entity.updatedAt,
                 )
             },
-            inbox = inbox.map { entity ->
-                AuthApi.SyncInboxDto(
-                    cloudKey = entity.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                    texto = entity.texto,
-                    timestamp = entity.timestamp,
-                    procesado = entity.procesado,
-                    updatedAt = entity.updatedAt,
-                )
-            },
+            // Inbox is gone locally; nothing to push until PR5 adds
+            // `recordatorios` to the payload.
+            inbox = emptyList(),
         )
         AuthApi.pushSync(token, snapshot).getOrThrow()
     }

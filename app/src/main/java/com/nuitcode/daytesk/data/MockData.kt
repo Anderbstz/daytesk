@@ -3,8 +3,8 @@ package com.nuitcode.daytesk.data
 import com.nuitcode.daytesk.model.Alerta
 import com.nuitcode.daytesk.model.AlertaTipo
 import com.nuitcode.daytesk.model.Contexto
-import com.nuitcode.daytesk.model.InboxItem
 import com.nuitcode.daytesk.model.Prioridad
+import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 
@@ -95,13 +95,13 @@ object MockData {
     val tareasSemana: List<Tarea> = listOf(tarea4, tarea5)
     val completadas: List<Tarea> = listOf(tarea3)
 
-    // ── 5 Inbox Items ─────────────────────────────────────────
-    val inboxItems: List<InboxItem> = listOf(
-        InboxItem(1, "Revisar correo del banco", now - dayMs),
-        InboxItem(2, "Buscar vuelos para vacaciones", now - 2 * dayMs),
-        InboxItem(3, "Comprar nuevo monitor", now - 3 * dayMs),
-        InboxItem(4, "Llamar al seguro médico", now - 4 * dayMs),
-        InboxItem(5, "Actualizar CV", now - 5 * dayMs),
+    // ── 5 Recordatorios (soonest first) ───────────────────────
+    val recordatorios: List<Recordatorio> = listOf(
+        Recordatorio(1, "Revisar correo del banco", now + dayMs),
+        Recordatorio(2, "Buscar vuelos para vacaciones", now + 2 * dayMs),
+        Recordatorio(3, "Comprar nuevo monitor", now + 3 * dayMs),
+        Recordatorio(4, "Llamar al seguro médico", now + 4 * dayMs),
+        Recordatorio(5, "Actualizar CV", now + 5 * dayMs),
     )
 
     // ── 2 Alertas ─────────────────────────────────────────────
@@ -113,7 +113,7 @@ object MockData {
     // ── Stats ─────────────────────────────────────────────────
     val stats: DayteskStats = DayteskStats(
         tareasHoy = 3,
-        inboxPendientes = 5,
+        recordatoriosPendientes = 5,
         tareasCompletadas = 1,
         rachaActual = 7,
         totalCompletadasHistorico = 42,
@@ -123,7 +123,7 @@ object MockData {
     // ── Weekly review ─────────────────────────────────────────
     val weeklyReview: List<String> = listOf(
         "Revisar próximos 7 días",
-        "Vaciar inbox",
+        "Revisar recordatorios",
         "Actualizar proyectos",
         "Revisar metas semanales",
         "Reflexión personal",

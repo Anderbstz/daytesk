@@ -42,7 +42,7 @@ private data class ChecklistItem(
 
 @Composable
 fun RevisionSemanalModal(
-    inboxPendientes: Int,
+    recordatoriosPendientes: Int,
     tareasVencidas: Int,
     tareasCompletadas: Int,
     onDismiss: () -> Unit,
@@ -50,7 +50,7 @@ fun RevisionSemanalModal(
     onProgramar: () -> Unit = {},
 ) {
     val checklistItems = listOf(
-        ChecklistItem("Procesar inbox", "$inboxPendientes items pendientes"),
+        ChecklistItem("Revisar recordatorios", "$recordatoriosPendientes pendientes"),
         ChecklistItem("Revisar vencidas", "$tareasVencidas tareas vencidas"),
         ChecklistItem("Actualizar próximas acciones"),
         ChecklistItem("Revisar proyectos"),

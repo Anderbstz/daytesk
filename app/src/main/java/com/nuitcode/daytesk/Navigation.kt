@@ -1,5 +1,10 @@
 package com.nuitcode.daytesk
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
@@ -147,6 +154,7 @@ fun DayteskApp(
         }
         is DayteskUiState.Success -> {
             cachedData = state.data
+            RequestNotificationPermissionOnLaunch()
             LaunchedEffect(state.data, syncReady) {
                 if (!syncReady) return@LaunchedEffect
                 archiveExpiredTasks(context, tareaDao)
@@ -309,6 +317,33 @@ fun DayteskApp(
                 }
             },
         )
+    }
+}
+
+/**
+ * Requests `POST_NOTIFICATIONS` once the logged-in shell is on screen.
+ *
+ * The `rememberSaveable` guard makes the prompt fire at most once per launch:
+ * a configuration change (rotation) restores the flag instead of re-prompting,
+ * satisfying the "Prompt on launch" scenario without nagging the user.
+ */
+@Composable
+private fun RequestNotificationPermissionOnLaunch() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {},
+    )
+    var prompted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (prompted) return@LaunchedEffect
+        prompted = true
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
 

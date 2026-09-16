@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.notification.ReminderScheduler
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
@@ -41,7 +42,15 @@ fun ConfiguracionScreen(
     onOpenWeeklyReview: () -> Unit,
 ) {
     val context = LocalContext.current
-    var notificationsOn by remember { mutableStateOf(true) }
+    val sessionStore = remember { SessionStore(context) }
+    // Persisted device preference (SessionStore), not fake local state: the
+    // value must survive leaving the screen and gate the scheduler.
+    var notificationsOn by remember { mutableStateOf(sessionStore.notificationsEnabled) }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        notificationsOn = enabled
+        sessionStore.notificationsEnabled = enabled
+    }
 
     Column(
         modifier = Modifier
@@ -91,9 +100,9 @@ fun ConfiguracionScreen(
                     checked = notificationsOn,
                     onCheckedChange = { enabled ->
                         if (enabled && notificationPermissions.isNotEmpty()) {
-                            requestPermission { notificationsOn = true }
+                            requestPermission { setNotificationsEnabled(true) }
                         } else {
-                            notificationsOn = enabled
+                            setNotificationsEnabled(enabled)
                         }
                     },
                     colors = SwitchDefaults.colors(

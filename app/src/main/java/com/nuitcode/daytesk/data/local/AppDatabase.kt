@@ -10,12 +10,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [TareaEntity::class, InboxItemEntity::class, ContextoEntity::class],
+    entities = [TareaEntity::class, RecordatorioEntity::class, InboxItemEntity::class, ContextoEntity::class],
     version = 4,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun tareaDao(): TareaDao
+    abstract fun recordatorioDao(): RecordatorioDao
     abstract fun inboxItemDao(): InboxItemDao
     abstract fun contextoDao(): ContextoDao
 

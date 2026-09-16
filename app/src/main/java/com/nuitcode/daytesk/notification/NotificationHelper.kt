@@ -51,4 +51,34 @@ object NotificationHelper {
         val notifyId = if (early) taskId.toInt() xor 0x40000000 else taskId.toInt()
         manager.notify(notifyId, notification)
     }
+
+    /**
+     * Recordatorio notification, reusing the [CHANNEL_ID] channel. The notify
+     * id shares the recordatorio request-code namespace so it can never
+     * overwrite a task notification with the same numeric id.
+     */
+    fun showRecordatorio(context: Context, texto: String, recordatorioId: Long, early: Boolean = false) {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, recordatorioId)
+        }
+        val notifyId = ReminderScheduler.recordatorioRequestCode(recordatorioId, early)
+        val pendingIntent = PendingIntent.getActivity(
+            context, notifyId, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val text = if (early) "En 1 hora: $texto" else "Recordatorio: $texto"
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("\u23F0 Daytesk")
+            .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify(notifyId, notification)
+    }
 }

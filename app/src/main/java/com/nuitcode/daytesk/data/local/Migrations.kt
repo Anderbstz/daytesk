@@ -65,6 +65,7 @@ object Migrations {
                         WHEN 'TRABAJO' THEN 2
                         WHEN 'PERSONAL' THEN 3
                         WHEN 'SALUD' THEN 4
+                        ELSE 3
                     END
                     """.trimIndent(),
                 )

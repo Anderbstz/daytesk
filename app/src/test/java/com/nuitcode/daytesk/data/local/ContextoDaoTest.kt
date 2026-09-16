@@ -73,9 +73,9 @@ class ContextoDaoTest {
 
     @Test
     fun getAllFlow_emitsOrderedByOrden() = runTest {
-        contextoDao.insert(ContextoEntity(nombre = "zzz", color = 0xFF000000.toInt(), orden = 30))
-        contextoDao.insert(ContextoEntity(nombre = "aaa", color = 0xFF111111.toInt(), orden = 10))
-        contextoDao.insert(ContextoEntity(nombre = "mmm", color = 0xFF222222.toInt(), orden = 20))
+        contextoDao.insert(ContextoEntity(nombre = "zzz", color = 0xFF000000.toInt(), orden = 30, esDefault = false))
+        contextoDao.insert(ContextoEntity(nombre = "aaa", color = 0xFF111111.toInt(), orden = 10, esDefault = false))
+        contextoDao.insert(ContextoEntity(nombre = "mmm", color = 0xFF222222.toInt(), orden = 20, esDefault = false))
 
         val all = contextoDao.getAllFlow().first()
         assertEquals(listOf("aaa", "mmm", "zzz"), all.map { it.nombre })
@@ -101,7 +101,7 @@ class ContextoDaoTest {
     @Test
     fun deleteIfUnreferenced_returnsCountWhenInUse() = runTest {
         val compras = contextoDao.insert(
-            ContextoEntity(nombre = "compras", color = 0xFF9CCC65.toInt(), orden = 5),
+            ContextoEntity(nombre = "compras", color = 0xFF9CCC65.toInt(), orden = 5, esDefault = false),
         )
         // Insert two tareas referencing compras
         tareaDao.insertTarea(
@@ -131,7 +131,7 @@ class ContextoDaoTest {
     @Test
     fun deleteIfUnreferenced_removesCustomWithZeroTareas_returnsZero() = runTest {
         val id = contextoDao.insert(
-            ContextoEntity(nombre = "limpieza", color = 0xFFAB47BC.toInt(), orden = 7),
+            ContextoEntity(nombre = "limpieza", color = 0xFFAB47BC.toInt(), orden = 7, esDefault = false),
         )
         val entity = contextoDao.getById(id)!!
 
@@ -148,7 +148,7 @@ class ContextoDaoTest {
     @Test
     fun countTareasForContext_returnsZeroWhenNone() = runTest {
         val id = contextoDao.insert(
-            ContextoEntity(nombre = "estudios", color = 0xFF29B6F6.toInt(), orden = 9),
+            ContextoEntity(nombre = "estudios", color = 0xFF29B6F6.toInt(), orden = 9, esDefault = false),
         )
         assertEquals(0, contextoDao.countTareasForContext(id))
     }
@@ -156,7 +156,7 @@ class ContextoDaoTest {
     @Test
     fun countTareasForContext_returnsMatchingCount() = runTest {
         val id = contextoDao.insert(
-            ContextoEntity(nombre = "proyectos", color = 0xFF5C6BC0.toInt(), orden = 11),
+            ContextoEntity(nombre = "proyectos", color = 0xFF5C6BC0.toInt(), orden = 11, esDefault = false),
         )
         tareaDao.insertTarea(TareaEntity(titulo = "a", contextoId = id))
         tareaDao.insertTarea(TareaEntity(titulo = "b", contextoId = id))

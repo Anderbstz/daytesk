@@ -76,6 +76,9 @@ dependencies {
   testImplementation(libs.junit)
   testImplementation(libs.kotlinx.coroutines.test)
   testImplementation(libs.robolectric)
+  // AndroidJUnit4 runner for Robolectric-backed local tests (also used by
+  // MigrationTest and the Room DAO tests).
+  testImplementation(libs.androidx.test.ext.junit)
 
   // Instrumented tests: jUnit rules and runners
   androidTestImplementation(libs.androidx.test.core)

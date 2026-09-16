@@ -126,6 +126,7 @@ class MigrationTest {
                         WHEN 'TRABAJO' THEN 2
                         WHEN 'PERSONAL' THEN 3
                         WHEN 'SALUD' THEN 4
+                        ELSE 3
                     END
                 """.trimIndent(),
             )
@@ -136,6 +137,7 @@ class MigrationTest {
 
         // Assert: 4 contextos seeded with ids 1..4
         db.rawQuery("SELECT COUNT(*) FROM contextos WHERE esDefault = 1", null).use { c ->
+            c.moveToFirst()
             assertEquals(4, c.getInt(0))
         }
         db.rawQuery("SELECT id FROM contextos ORDER BY orden ASC", null).use { c ->
@@ -192,7 +194,7 @@ class MigrationTest {
             )
             db.execSQL("ALTER TABLE `tareas` ADD COLUMN `contextoId` INTEGER NOT NULL DEFAULT 3")
             db.execSQL(
-                "UPDATE `tareas` SET `contextoId` = CASE `contexto` WHEN 'CASA' THEN 1 WHEN 'TRABAJO' THEN 2 WHEN 'PERSONAL' THEN 3 WHEN 'SALUD' THEN 4 END",
+                "UPDATE `tareas` SET `contextoId` = CASE `contexto` WHEN 'CASA' THEN 1 WHEN 'TRABAJO' THEN 2 WHEN 'PERSONAL' THEN 3 WHEN 'SALUD' THEN 4 ELSE 3 END",
             )
             db.setTransactionSuccessful()
         } finally {
@@ -200,6 +202,7 @@ class MigrationTest {
         }
 
         db.rawQuery("SELECT COUNT(*) FROM tareas WHERE contextoId = 0", null).use { c ->
+            c.moveToFirst()
             assertEquals(0, c.getInt(0))
         }
     }

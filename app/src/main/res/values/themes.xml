@@ -2,4 +2,11 @@
 <resources>
 
     <style name="Theme.Daytesk" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+      Dialog-themed host for RecordatorioCaptureActivity: the widget cannot host
+      an editable field, so the capture form floats over the launcher in a
+      Material dialog window.
+    -->
+    <style name="Theme.Daytesk.Dialog" parent="android:Theme.Material.Light.Dialog" />
 </resources>

@@ -35,6 +35,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".widget.RecordatorioCaptureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.Daytesk.Dialog"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
         <receiver
             android:name=".notification.BootReceiver"
             android:exported="false">

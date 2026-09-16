@@ -18,12 +18,19 @@ class BootReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val tareas = AppDatabase.getInstance(context)
+                val database = AppDatabase.getInstance(context)
+                val tareas = database
                     .tareaDao()
                     .getAllTareas()
                     .first()
                     .map { it.toDomain() }
                 ReminderScheduler.reschedulePending(context, tareas)
+                val recordatorios = database
+                    .recordatorioDao()
+                    .getAllRecordatorios()
+                    .first()
+                    .map { it.toDomain() }
+                ReminderScheduler.rescheduleRecordatorios(context, recordatorios)
                 NextTaskWidgetProvider.refresh(context)
                 NextTaskWidgetProvider.refresh(context)
             } finally {

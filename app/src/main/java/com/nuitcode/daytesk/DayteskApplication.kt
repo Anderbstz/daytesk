@@ -26,6 +26,8 @@ class DayteskApplication : Application() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             val tareas = database.tareaDao().getAllTareas().first().map { it.toDomain() }
             ReminderScheduler.reschedulePending(this@DayteskApplication, tareas)
+            val recordatorios = database.recordatorioDao().getAllRecordatorios().first().map { it.toDomain() }
+            ReminderScheduler.rescheduleRecordatorios(this@DayteskApplication, recordatorios)
         }
     }
 }

@@ -7,14 +7,14 @@ La app **no** habla con Neon directo: siempre va `app → servidor → Neon`.
 
 | Qué | Dónde | Notas |
 |---|---|---|
-| Tareas, inbox, contextos | **Room en el teléfono** (`daytesk.db`) | Fuente de verdad mientras usás la app |
+| Tareas, recordatorios, contextos | **Room en el teléfono** (`daytesk.db`) | Fuente de verdad mientras usás la app |
 | Cuentas y copia en la nube | **Neon** vía Ktor | Login, register, `GET/PUT /sync` |
 | API | **Render** `https://daytesk.onrender.com` | Plan free se duerme; el primer request tarda ~30–50 s |
 | Secretos | Render Environment + `env/.env` local (gitignored) | Nunca commitear `.env` |
 
 Hay **dos bases**. Crear una cuenta nueva no vacía sola el teléfono. Si Room todavía tiene tareas de otro usuario y la nube de la cuenta nueva está vacía, un `PUT /sync` **sube esas tareas a Neon**. Eso se vio como “tareas hardcodeadas” al registrarse.
 
-Al registrar o cambiar de usuario hay que **borrar tareas/inbox locales antes de pushear**. Si el `GET /sync` falla (Render despertando) y no se limpia antes, el debounce de sync vuelve a subir basura.
+Al registrar o cambiar de usuario hay que **borrar tareas/recordatorios locales antes de pushear**. Si el `GET /sync` falla (Render despertando) y no se limpia antes, el debounce de sync vuelve a subir basura.
 
 ## Deploy
 
@@ -37,16 +37,29 @@ Al registrar o cambiar de usuario hay que **borrar tareas/inbox locales antes de
 ## Sync (contrato)
 
 - `GET /sync` con `Authorization: Bearer <token>`
-- `PUT /sync` reemplaza **todo** lo de ese usuario (contextos, tareas, inbox).
+- `PUT /sync` reemplaza **todo** lo de ese usuario (contextos, tareas, recordatorios).
 - Cada fila: `cloudKey` + `updatedAt`.
-- Cuenta nueva / cambio de usuario: wipe local de tareas e inbox, después pull; si la nube está vacía, push de lo local ya limpio.
+- Cuenta nueva / cambio de usuario: wipe local de tareas y recordatorios, después pull; si la nube está vacía, push de lo local ya limpio.
 - Logout: no debería dejar las tareas del usuario A para que las herede el usuario B.
+
+## Recordatorios reemplazan al Inbox
+
+- El **Inbox se eliminó** y lo reemplaza **Recordatorios** (texto + fecha obligatoria + repetición, con notificaciones 1 h antes y al vencer).
+- Los datos viejos del Inbox **se descartan a propósito**: no hay migración. La tabla `inbox_items` se borra en `MIGRATION_5_6` y no se convierte nada a recordatorios.
+- El payload de sync dejó de mandar `inbox` y ahora manda `recordatorios`. El server guarda en `user_recordatorios`; la tabla `user_inbox` queda en la base **sin uso** para que un revert de código pueda volver a sincronizar sin tocar la DB.
+- Si el `PUT /sync` trae una clave desconocida (por ejemplo `inbox` de un cliente viejo), el server la ignora (`ignoreUnknownKeys`).
+- La app subió a `versionCode = 10` por este cambio de contrato.
+
+### Aviso de release (actualización forzada)
+
+Un **APK viejo** (anterior al cambio de payload) que haga `PUT /sync` después de este deploy **puede borrar los `recordatorios`** de esa cuenta: el `replace` del server borra e inserta en la misma transacción, y como ese cliente ya no manda `recordatorios`, termina guardando la lista vacía. Recomendación: **forzar la actualización** de la app antes de que los usuarios vuelvan a sincronizar.
 
 ## Piezas de producto ya hechas
 
 - Editar tarea, repetición (al completar crea la siguiente).
 - Recordatorios locales: 1 h antes + al vencer; en Configuración, alarmas exactas (Android 12+).
 - Widget de inicio: hay que agregarlo a mano; fijar en Inicio no refresca el widget al toque.
+- Widget de recordatorio (2x2): al tocarlo abre una Activity con tema de diálogo para capturar texto + fecha; sin fecha no guarda nada.
 - Perfil: las filas del menú deben ser `clickable` **antes** del `padding` o el ripple queda solo sobre el texto.
 - Contextos: máximo 8; dejar al menos 1.
 

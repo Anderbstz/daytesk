@@ -273,4 +273,49 @@ class MigrationTest {
             assertTrue("inbox_items is dropped in PR3, not by MIGRATION_4_5", c.moveToFirst())
         }
     }
+
+    /**
+     * Strict TDD — RED test written before [Migrations.MIGRATION_5_6] and
+     * [Migrations.DROP_INBOX_ITEMS_DDL] exist.
+     *
+     * MIGRATION_5_6 contract (see sdd/quick-reminders/design, "Removal plan
+     * for Inbox"): the `inbox_items` table is dropped once the Inbox entity and
+     * DAO are gone from `AppDatabase`. The DROP is the shared
+     * [Migrations.DROP_INBOX_ITEMS_DDL] literal the migration itself runs, so
+     * the test can never drift from production DDL.
+     */
+    @Test
+    fun migration_v5ToV6_dropsInboxItems() {
+        // v5 leftover: the inbox table still on disk after MIGRATION_4_5.
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS inbox_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                texto TEXT NOT NULL,
+                timestamp INTEGER NOT NULL,
+                procesado INTEGER NOT NULL,
+                cloudKey TEXT NOT NULL DEFAULT '',
+                updatedAt INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent(),
+        )
+        db.execSQL("INSERT INTO inbox_items (texto, timestamp, procesado) VALUES ('legacy', 1, 0)")
+
+        db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'", null).use { c ->
+            assertTrue("precondition: inbox_items must exist before MIGRATION_5_6", c.moveToFirst())
+        }
+
+        // Apply the MIGRATION_5_6 SQL exactly as the migration runs it.
+        db.beginTransaction()
+        try {
+            db.execSQL(Migrations.DROP_INBOX_ITEMS_DDL)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        db.rawQuery("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'inbox_items'", null).use { c ->
+            assertTrue("inbox_items must be gone after MIGRATION_5_6", !c.moveToFirst())
+        }
+    }
 }

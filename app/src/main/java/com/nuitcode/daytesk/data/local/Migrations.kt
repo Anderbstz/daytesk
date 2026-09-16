@@ -123,18 +123,47 @@ object Migrations {
     /**
      * **MIGRATION_4_5** — introduces the `recordatorios` table.
      *
-     * NOTE: the `inbox_items` drop that the design associates with this
-     * migration is deliberately deferred to the inbox-removal slice (PR3).
-     * `InboxItemEntity` is still part of [AppDatabase.entities] until then, so
-     * dropping its table here would fail Room's on-open schema validation
-     * (`IllegalStateException`) on an upgraded v4 database. The table is
-     * removed together with the Inbox entity/DAO in PR3.
+     * The `inbox_items` drop deliberately did NOT ship here: `InboxItemEntity`
+     * was still part of [AppDatabase.entities] at v5, so dropping its table in
+     * this migration would have failed Room's on-open schema validation
+     * (`IllegalStateException`) on an upgraded v4 database. The drop moved to
+     * [MIGRATION_5_6] once the Inbox entity/DAO were removed from the database.
+     * This migration is historical and MUST NOT be edited.
      */
     val MIGRATION_4_5: Migration = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.beginTransaction()
             try {
                 db.execSQL(CREATE_RECORDATORIOS_DDL)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
+
+    /**
+     * Canonical statement that drops the retired `inbox_items` table.
+     *
+     * Exposed as a literal so [MIGRATION_5_6] and `MigrationTest` execute the
+     * exact same statement — the test can never drift from production DDL.
+     */
+    const val DROP_INBOX_ITEMS_DDL: String = "DROP TABLE IF EXISTS `inbox_items`"
+
+    /**
+     * **MIGRATION_5_6** — removes the `inbox_items` table after the Inbox
+     * entity and DAO were deleted from [AppDatabase].
+     *
+     * Existing inbox rows are intentionally discarded, never migrated: the
+     * spec records "inbox (REMOVED) / Migration: None". `IF EXISTS` keeps the
+     * migration safe on databases where the table was already absent. Runs in
+     * a transaction like every other migration.
+     */
+    val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL(DROP_INBOX_ITEMS_DDL)
                 db.setTransactionSuccessful()
             } finally {
                 db.endTransaction()

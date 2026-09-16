@@ -18,9 +18,59 @@ object AuthApi {
     data class SyncSnapshot(
         val contextos: List<SyncContextoDto>,
         val tareas: List<SyncTareaDto>,
-        val inbox: List<SyncInboxDto>,
+        val recordatorios: List<SyncRecordatorioDto>,
     ) {
-        fun isEmpty(): Boolean = contextos.isEmpty() && tareas.isEmpty() && inbox.isEmpty()
+        fun isEmpty(): Boolean = contextos.isEmpty() && tareas.isEmpty() && recordatorios.isEmpty()
+
+        fun toJson(): JSONObject {
+            val contextosJson = JSONArray()
+            contextos.forEach { item ->
+                contextosJson.put(
+                    JSONObject()
+                        .put("cloudKey", item.cloudKey)
+                        .put("nombre", item.nombre)
+                        .put("color", item.color)
+                        .put("iconId", item.iconId ?: JSONObject.NULL)
+                        .put("orden", item.orden)
+                        .put("esDefault", item.esDefault)
+                        .put("updatedAt", item.updatedAt),
+                )
+            }
+            val tareasJson = JSONArray()
+            tareas.forEach { item ->
+                tareasJson.put(
+                    JSONObject()
+                        .put("cloudKey", item.cloudKey)
+                        .put("titulo", item.titulo)
+                        .put("descripcion", item.descripcion)
+                        .put("prioridad", item.prioridad)
+                        .put("contextoKey", item.contextoKey)
+                        .put("estado", item.estado)
+                        .put("fechaCreacion", item.fechaCreacion)
+                        .put("fechaVencimiento", item.fechaVencimiento ?: JSONObject.NULL)
+                        .put("fechaCompletada", item.fechaCompletada ?: JSONObject.NULL)
+                        .put("orden", item.orden)
+                        .put("repeticion", item.repeticion)
+                        .put("updatedAt", item.updatedAt),
+                )
+            }
+            val recordatoriosJson = JSONArray()
+            recordatorios.forEach { item ->
+                recordatoriosJson.put(
+                    JSONObject()
+                        .put("cloudKey", item.cloudKey)
+                        .put("texto", item.texto)
+                        .put("fecha", item.fecha)
+                        .put("repeticion", item.repeticion)
+                        .put("fechaCreacion", item.fechaCreacion)
+                        .put("updatedAt", item.updatedAt),
+                )
+            }
+            return JSONObject()
+                .put("contextos", contextosJson)
+                .put("tareas", tareasJson)
+                .put("recordatorios", recordatoriosJson)
+        }
     }
 
     data class SyncContextoDto(
@@ -48,11 +98,12 @@ object AuthApi {
         val updatedAt: Long,
     )
 
-    data class SyncInboxDto(
+    data class SyncRecordatorioDto(
         val cloudKey: String,
         val texto: String,
-        val timestamp: Long,
-        val procesado: Boolean,
+        val fecha: Long,
+        val repeticion: String,
+        val fechaCreacion: Long,
         val updatedAt: Long,
     )
 
@@ -175,7 +226,7 @@ object AuthApi {
         return trimmed.startsWith("{") || trimmed.startsWith("[")
     }
 
-    private fun parseSnapshot(json: JSONObject): SyncSnapshot {
+    internal fun parseSnapshot(json: JSONObject): SyncSnapshot {
         val contextos = json.optJSONArray("contextos").orEmpty().mapObjects { item ->
             SyncContextoDto(
                 cloudKey = item.getString("cloudKey"),
@@ -203,65 +254,17 @@ object AuthApi {
                 updatedAt = item.optLong("updatedAt"),
             )
         }
-        val inbox = json.optJSONArray("inbox").orEmpty().mapObjects { item ->
-            SyncInboxDto(
+        val recordatorios = json.optJSONArray("recordatorios").orEmpty().mapObjects { item ->
+            SyncRecordatorioDto(
                 cloudKey = item.getString("cloudKey"),
                 texto = item.getString("texto"),
-                timestamp = item.getLong("timestamp"),
-                procesado = item.optBoolean("procesado"),
+                fecha = item.getLong("fecha"),
+                repeticion = item.optString("repeticion", "NINGUNA"),
+                fechaCreacion = item.optLong("fechaCreacion"),
                 updatedAt = item.optLong("updatedAt"),
             )
         }
-        return SyncSnapshot(contextos, tareas, inbox)
-    }
-
-    private fun SyncSnapshot.toJson(): JSONObject {
-        val contextosJson = JSONArray()
-        contextos.forEach { item ->
-            contextosJson.put(
-                JSONObject()
-                    .put("cloudKey", item.cloudKey)
-                    .put("nombre", item.nombre)
-                    .put("color", item.color)
-                    .put("iconId", item.iconId ?: JSONObject.NULL)
-                    .put("orden", item.orden)
-                    .put("esDefault", item.esDefault)
-                    .put("updatedAt", item.updatedAt),
-            )
-        }
-        val tareasJson = JSONArray()
-        tareas.forEach { item ->
-            tareasJson.put(
-                JSONObject()
-                    .put("cloudKey", item.cloudKey)
-                    .put("titulo", item.titulo)
-                    .put("descripcion", item.descripcion)
-                    .put("prioridad", item.prioridad)
-                    .put("contextoKey", item.contextoKey)
-                    .put("estado", item.estado)
-                    .put("fechaCreacion", item.fechaCreacion)
-                    .put("fechaVencimiento", item.fechaVencimiento ?: JSONObject.NULL)
-                    .put("fechaCompletada", item.fechaCompletada ?: JSONObject.NULL)
-                    .put("orden", item.orden)
-                    .put("repeticion", item.repeticion)
-                    .put("updatedAt", item.updatedAt),
-            )
-        }
-        val inboxJson = JSONArray()
-        inbox.forEach { item ->
-            inboxJson.put(
-                JSONObject()
-                    .put("cloudKey", item.cloudKey)
-                    .put("texto", item.texto)
-                    .put("timestamp", item.timestamp)
-                    .put("procesado", item.procesado)
-                    .put("updatedAt", item.updatedAt),
-            )
-        }
-        return JSONObject()
-            .put("contextos", contextosJson)
-            .put("tareas", tareasJson)
-            .put("inbox", inboxJson)
+        return SyncSnapshot(contextos, tareas, recordatorios)
     }
 
     private fun JSONArray?.orEmpty(): JSONArray = this ?: JSONArray()

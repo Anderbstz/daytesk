@@ -6,6 +6,7 @@ import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.ContextoSeed
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.ContextoEntity
+import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.TareaEntity
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
@@ -72,9 +73,9 @@ class CloudSync(
         val keepLocal = sessionStore.consumeKeepLocal()
         sessionStore.consumeNeedsPull()
         val remote = stripLegacySamples(AuthApi.pullSync(token).getOrThrow())
-        // Inbox was removed in the recordatorios slice; only tareas decide
-        // whether the remote account has user content now.
-        val remoteHasUserContent = remote.tareas.isNotEmpty()
+        // Tareas and recordatorios are the only synced lists that carry user
+        // content; either one makes the remote account non-empty.
+        val remoteHasUserContent = remote.tareas.isNotEmpty() || remote.recordatorios.isNotEmpty()
 
         if (keepLocal && !remoteHasUserContent) {
             ensureDefaultContextos()
@@ -84,8 +85,9 @@ class CloudSync(
 
         if (wipe || !remoteHasUserContent) {
             database.tareaDao().deleteAll()
+            database.recordatorioDao().deleteAll()
             if (remote.contextos.isNotEmpty()) {
-                applyLocked(remote.copy(tareas = emptyList(), inbox = emptyList()))
+                applyLocked(remote.copy(tareas = emptyList(), recordatorios = emptyList()))
             }
             ensureDefaultContextos()
             pushLocked(token)
@@ -98,9 +100,9 @@ class CloudSync(
 
     private fun stripLegacySamples(snapshot: AuthApi.SyncSnapshot): AuthApi.SyncSnapshot {
         val tareas = snapshot.tareas.filterNot { it.titulo in SAMPLE_TASK_TITLES }
-        // The Inbox payload is no longer consumed locally; drop it so a stale
-        // remote list can never resurface. PR5 replaces it with `recordatorios`.
-        return snapshot.copy(tareas = tareas, inbox = emptyList())
+        // Only task titles need the legacy-sample filter: recordatorios are a
+        // new list with no historical seed data to strip.
+        return snapshot.copy(tareas = tareas)
     }
 
     private suspend fun ensureDefaultContextos() {
@@ -112,7 +114,9 @@ class CloudSync(
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {
         val contextoDao = database.contextoDao()
         val tareaDao = database.tareaDao()
+        val recordatorioDao = database.recordatorioDao()
         tareaDao.deleteAll()
+        recordatorioDao.deleteAll()
         contextoDao.deleteAll()
         val keyToId = mutableMapOf<String, Long>()
         snapshot.contextos.sortedBy { it.orden }.forEach { item ->
@@ -151,11 +155,26 @@ class CloudSync(
                 ),
             )
         }
+        snapshot.recordatorios.forEach { item ->
+            recordatorioDao.insert(
+                RecordatorioEntity(
+                    id = 0,
+                    texto = item.texto,
+                    fecha = item.fecha,
+                    repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
+                        .getOrDefault(Repeticion.NINGUNA).name,
+                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                    updatedAt = item.updatedAt,
+                    fechaCreacion = item.fechaCreacion,
+                ),
+            )
+        }
     }
 
     private suspend fun pushLocked(token: String) {
         val contextos = database.contextoDao().getAllOnce()
         val tareas = database.tareaDao().getAllOnce()
+        val recordatorios = database.recordatorioDao().getAllOnce()
         val contextoKeyById = contextos.associate { entity ->
             entity.id to entity.cloudKey.ifBlank {
                 if (entity.id in 1L..4L) "default-${entity.id}" else UUID.randomUUID().toString()
@@ -191,9 +210,16 @@ class CloudSync(
                     updatedAt = entity.updatedAt,
                 )
             },
-            // Inbox is gone locally; nothing to push until PR5 adds
-            // `recordatorios` to the payload.
-            inbox = emptyList(),
+            recordatorios = recordatorios.map { entity ->
+                AuthApi.SyncRecordatorioDto(
+                    cloudKey = entity.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                    texto = entity.texto,
+                    fecha = entity.fecha,
+                    repeticion = entity.repeticion,
+                    fechaCreacion = entity.fechaCreacion,
+                    updatedAt = entity.updatedAt,
+                )
+            },
         )
         AuthApi.pushSync(token, snapshot).getOrThrow()
     }

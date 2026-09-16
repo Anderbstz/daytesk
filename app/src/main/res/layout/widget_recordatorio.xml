@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  RemoteViews-safe layout: only LinearLayout / ImageView / TextView.
+  No EditText and no interactive widget — tapping the root launches
+  RecordatorioCaptureActivity, which hosts the editable capture form.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/recordatorio_widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <ImageView
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_widget_alarm" />
+
+    <TextView
+        android:id="@+id/recordatorio_widget_title"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:maxLines="1"
+        android:text="@string/widget_recordatorio_title"
+        android:textColor="#1A1410"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/recordatorio_widget_hint"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:maxLines="1"
+        android:text="@string/widget_recordatorio_hint"
+        android:textColor="#8A8178"
+        android:textSize="11sp" />
+</LinearLayout>

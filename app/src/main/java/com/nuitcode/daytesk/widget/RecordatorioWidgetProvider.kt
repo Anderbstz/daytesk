@@ -1,11 +1,13 @@
 package com.nuitcode.daytesk.widget
 
+import android.app.AlarmManager
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.SystemClock
 import android.widget.RemoteViews
 import com.nuitcode.daytesk.MainActivity
 import com.nuitcode.daytesk.R
@@ -31,13 +33,38 @@ import java.util.Locale
  * [UpcomingRecordatorio.pick] seam and falls back to the empty state when no
  * reminder is upcoming. Every recordatorio write path calls [refresh] so the
  * widget never shows stale text.
+ *
+ * The write-path refresh alone is not enough to keep the row honest: the
+ * "next upcoming" set changes on its own the moment the soonest reminder's
+ * `fecha` slips into the past, and that transition happens with no write at
+ * all — most visibly while the notifications toggle is off, because
+ * [com.nuitcode.daytesk.notification.ReminderScheduler] then registers no alarm
+ * and nothing else re-renders the widget. A repeating [ACTION_TICK] alarm
+ * (see [scheduleTicks]) bounds that stale window the same way
+ * [NextTaskWidgetProvider] keeps its own row live.
  */
 class RecordatorioWidgetProvider : AppWidgetProvider() {
+    override fun onEnabled(context: Context) {
+        scheduleTicks(context)
+    }
+
+    override fun onDisabled(context: Context) {
+        cancelTicks(context)
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        when (intent.action) {
+            ACTION_TICK -> refresh(context)
+            else -> super.onReceive(context, intent)
+        }
+    }
+
     override fun onUpdate(
         context: Context,
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray,
     ) {
+        scheduleTicks(context)
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
@@ -50,6 +77,26 @@ class RecordatorioWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        const val ACTION_TICK = "com.nuitcode.daytesk.widget.RECORDATORIO_TICK"
+
+        /**
+         * Tick cadence.
+         *
+         * The row only prints minute precision ("d MMM · HH:mm"), and its one
+         * autonomous state change is "the soonest reminder became past due" —
+         * a transition that always lands on a minute boundary. A 60s tick
+         * therefore bounds the stale window to under one displayed minute.
+         * Matching [NextTaskWidgetProvider.TICK_MS] keeps both home-screen rows
+         * on a single cadence the OS can batch into one wake-up.
+         */
+        private const val TICK_MS = 60_000L
+
+        // Distinct from the task widget's tick code (71) and from this
+        // provider's click PendingIntents (10/11): this broadcast is explicit
+        // to the class, but unique codes keep the intent shapes independently
+        // addressable if they ever change.
+        private const val REQUEST_TICK = 72
+
         /**
          * Re-renders every placed instance.
          *
@@ -117,6 +164,41 @@ class RecordatorioWidgetProvider : AppWidgetProvider() {
             return PendingIntent.getActivity(
                 context,
                 REQUEST_OPEN_CAPTURE,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+
+        /**
+         * The repeating alarm that keeps the row honest between writes.
+         *
+         * Deliberately independent of
+         * [com.nuitcode.daytesk.notification.NotificationPreferences]: the widget
+         * is a read-only surface, not a reminder, so a user who silenced
+         * notifications still expects the row to stop advertising a reminder
+         * that already fired.
+         */
+        private fun scheduleTicks(context: Context) {
+            val alarm = context.getSystemService(AlarmManager::class.java)
+            alarm.setRepeating(
+                AlarmManager.ELAPSED_REALTIME,
+                SystemClock.elapsedRealtime() + TICK_MS,
+                TICK_MS,
+                tickIntent(context),
+            )
+        }
+
+        private fun cancelTicks(context: Context) {
+            context.getSystemService(AlarmManager::class.java).cancel(tickIntent(context))
+        }
+
+        private fun tickIntent(context: Context): PendingIntent {
+            val intent = Intent(context, RecordatorioWidgetProvider::class.java).apply {
+                action = ACTION_TICK
+            }
+            return PendingIntent.getBroadcast(
+                context,
+                REQUEST_TICK,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )

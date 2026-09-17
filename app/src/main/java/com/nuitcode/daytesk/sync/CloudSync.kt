@@ -12,6 +12,7 @@ import com.nuitcode.daytesk.data.local.TareaEntity
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,7 +34,7 @@ class CloudSync(
     suspend fun onStart() {
         val token = sessionStore.token ?: return
         mutex.withLock {
-            runCatching { pullOrPushLocked(token) }
+            runSync("pull") { pullOrPushLocked(token) }
         }
         NextTaskWidgetProvider.refresh(context)
     }
@@ -41,9 +42,36 @@ class CloudSync(
     suspend fun pushNow() {
         val token = sessionStore.token ?: return
         mutex.withLock {
-            runCatching { pushLocked(token) }
+            runSync("push") { pushLocked(token) }
         }
         NextTaskWidgetProvider.refresh(context)
+    }
+
+    /**
+     * Runs a sync step and makes its outcome observable.
+     *
+     * A failure used to be swallowed by `runCatching` with no outbox, retry or
+     * user feedback, so a change made while a push failed was silently lost on
+     * the next pull (RESIL-003). The failure is now logged through [SyncLog] and
+     * persisted as [SessionStore.lastSyncError], and the pending-push flag stays
+     * set so the next `onStart` pushes before it pulls.
+     *
+     * Accepted limitation (deliberately not a full sync engine): there is no
+     * retry scheduler and no durable outbox. A failed push is only retried on
+     * the next `onStart`/`pushNow`, and there is no user-facing banner yet — the
+     * persisted error is the observable signal for now.
+     */
+    private suspend fun runSync(stage: String, block: suspend () -> Unit) {
+        try {
+            block()
+            sessionStore.lastSyncError = null
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: Throwable) {
+            val message = "${error::class.java.simpleName}: ${error.message.orEmpty()}"
+            sessionStore.lastSyncError = message
+            SyncLog.failure(stage, error)
+        }
     }
 
     companion object {

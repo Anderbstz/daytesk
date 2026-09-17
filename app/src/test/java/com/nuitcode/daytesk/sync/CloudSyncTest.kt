@@ -13,10 +13,13 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 
 /**
  * RESIL-004, end-to-end pull behaviour with a fake transport.
@@ -54,17 +57,23 @@ class CloudSyncTest {
 
     private class FakeTransport(
         private val pullResult: Result<AuthApi.SyncSnapshot>,
+        private val pushResult: Result<Unit> = Result.success(Unit),
     ) : SyncTransport {
         val pushed = mutableListOf<AuthApi.SyncSnapshot>()
+        var pullCount = 0
+            private set
 
-        override suspend fun pull(token: String): Result<AuthApi.SyncSnapshot> = pullResult
+        override suspend fun pull(token: String): Result<AuthApi.SyncSnapshot> {
+            pullCount += 1
+            return pullResult
+        }
 
         override suspend fun push(
             token: String,
             snapshot: AuthApi.SyncSnapshot,
         ): Result<Unit> {
             pushed += snapshot
-            return Result.success(Unit)
+            return pushResult
         }
     }
 
@@ -145,5 +154,56 @@ class CloudSyncTest {
             "a confirmed push must clear the pending flag",
             sessionStore.hasPendingPush,
         )
+    }
+
+    // ── RESIL-003: failures must be observable, not swallowed ──────────────
+
+    @Test
+    fun aFailedPull_isReportedInsteadOfSilentlyDiscarded() = runTest {
+        val transport = FakeTransport(Result.failure(IllegalStateException("server down")))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        val error = sessionStore.lastSyncError
+        assertNotNull("a sync failure must be surfaced", error)
+        assertTrue("the message must name the cause, got $error", error!!.contains("server down"))
+        assertTrue(
+            "the failure must also reach the sync log",
+            ShadowLog.getLogsForTag(SyncLog.TAG).isNotEmpty(),
+        )
+    }
+
+    @Test
+    fun aFailedPush_keepsTheLocalChangeFlaggedAndIsReported() = runTest {
+        insertLocalRecordatorio("local-1")
+        sessionStore.hasPendingPush = true
+        val transport = FakeTransport(
+            pullResult = Result.success(emptySnapshot()),
+            pushResult = Result.failure(IllegalStateException("offline")),
+        )
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertNotNull("a failed push must be surfaced", sessionStore.lastSyncError)
+        assertTrue(
+            "an unpushed change must stay flagged for the next attempt",
+            sessionStore.hasPendingPush,
+        )
+        assertEquals("the push must be attempted", 1, transport.pushed.size)
+        assertEquals(
+            "a failed push must defer the pull instead of overwriting local state",
+            0,
+            transport.pullCount,
+        )
+    }
+
+    @Test
+    fun aSuccessfulSync_clearsAPreviousError() = runTest {
+        sessionStore.lastSyncError = "old failure"
+        val transport = FakeTransport(Result.success(emptySnapshot()))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertNull("a successful sync must clear the recorded error", sessionStore.lastSyncError)
     }
 }

@@ -28,6 +28,17 @@ class SessionStore(context: Context) {
         get() = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
         set(value) { prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, value).apply() }
 
+    /**
+     * `true` while a local change has not been confirmed by the server.
+     *
+     * Set before a push starts and cleared only after it succeeds, so a change
+     * made while the push fails (or while the process dies mid-push) is never
+     * overwritten by the next pull.
+     */
+    var hasPendingPush: Boolean
+        get() = prefs.getBoolean(KEY_PENDING_PUSH, false)
+        set(value) { prefs.edit().putBoolean(KEY_PENDING_PUSH, value).apply() }
+
     val hadPreviousAccount: Boolean
         get() = prefs.getBoolean(KEY_HAD_ACCOUNT, false)
 
@@ -112,5 +123,6 @@ class SessionStore(context: Context) {
         private const val KEY_HAD_ACCOUNT = "had_account"
         private const val KEY_PREVIOUS_EMAIL = "previous_email"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        private const val KEY_PENDING_PUSH = "pending_push"
     }
 }

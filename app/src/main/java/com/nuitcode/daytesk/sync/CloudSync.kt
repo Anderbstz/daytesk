@@ -12,7 +12,9 @@ import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -23,6 +25,7 @@ class CloudSync(
     private val context: Context,
     private val database: AppDatabase,
     private val sessionStore: SessionStore,
+    private val transport: SyncTransport = HttpSyncTransport,
 ) {
     private val mutex = Mutex()
 
@@ -45,12 +48,30 @@ class CloudSync(
     companion object {
         private var debounceJob: Job? = null
 
+        /**
+         * App-lifetime scope for pushes that must outlive their caller.
+         *
+         * A widget capture finishes its Activity immediately; a push tied to
+         * that Activity's `lifecycleScope` would be cancelled before it ran.
+         */
+        private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
         fun schedulePush(scope: CoroutineScope, sync: CloudSync) {
             debounceJob?.cancel()
             debounceJob = scope.launch {
                 delay(900)
                 sync.pushNow()
             }
+        }
+
+        /**
+         * Enqueues the same debounced push on [appScope].
+         *
+         * Use this from short-lived callers (Activities, receivers) that finish
+         * before the debounce elapses.
+         */
+        fun schedulePush(sync: CloudSync) {
+            schedulePush(appScope, sync)
         }
 
         fun cancelScheduled() {
@@ -70,25 +91,42 @@ class CloudSync(
 
     private suspend fun pullOrPushLocked(token: String) {
         val wipe = sessionStore.consumeWipeLocal()
-        val keepLocal = sessionStore.consumeKeepLocal()
+        // Consumed for its side effect only: the union merge in [applyLocked]
+        // now keeps every local-only row, so "keep local" is inherent. The flag
+        // still has to be cleared so it cannot affect a later login.
+        sessionStore.consumeKeepLocal()
         sessionStore.consumeNeedsPull()
-        val remote = stripLegacySamples(AuthApi.pullSync(token).getOrThrow())
-        // Tareas and recordatorios are the only synced lists that carry user
-        // content; either one makes the remote account non-empty.
-        val remoteHasUserContent = remote.tareas.isNotEmpty() || remote.recordatorios.isNotEmpty()
 
-        if (keepLocal && !remoteHasUserContent) {
+        if (wipe) {
+            // Explicit account switch: the user chose the new account, so local
+            // user content is intentionally discarded.
+            database.tareaDao().deleteAll()
+            database.recordatorioDao().deleteAll()
+            val remote = stripLegacySamples(transport.pull(token).getOrThrow())
+            if (remote.contextos.isNotEmpty()) {
+                applyLocked(remote.copy(tareas = emptyList(), recordatorios = emptyList()))
+            }
             ensureDefaultContextos()
             pushLocked(token)
             return
         }
 
-        if (wipe || !remoteHasUserContent) {
-            database.tareaDao().deleteAll()
-            database.recordatorioDao().deleteAll()
-            if (remote.contextos.isNotEmpty()) {
-                applyLocked(remote.copy(tareas = emptyList(), recordatorios = emptyList()))
-            }
+        // A local write may not have reached the server yet. Push before
+        // pulling so an incoming snapshot cannot overwrite it. If this throws,
+        // the pull below never runs and the local data is preserved (RESIL-004).
+        if (sessionStore.hasPendingPush) {
+            pushLocked(token)
+        }
+
+        val remote = stripLegacySamples(transport.pull(token).getOrThrow())
+        // Tareas and recordatorios are the only synced lists that carry user
+        // content; either one makes the remote account non-empty.
+        val remoteHasUserContent = remote.tareas.isNotEmpty() || remote.recordatorios.isNotEmpty()
+
+        if (!remoteHasUserContent) {
+            // The remote holds no user content, so any local rows are the only
+            // copy that exists. Wiping them here is exactly how a widget-captured
+            // recordatorio used to be destroyed; push local instead (RESIL-004).
             ensureDefaultContextos()
             pushLocked(token)
             return
@@ -111,7 +149,13 @@ class CloudSync(
         ContextoSeed.entries.forEach { seed -> dao.insert(seed.toEntity()) }
     }
 
+    /**
+     * Replaces the local store with the remote snapshot, keeping any row that
+     * exists only locally (see [mergePreservingLocal]).
+     */
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {
+        val merged = snapshot.mergePreservingLocal(localSnapshot())
+
         val contextoDao = database.contextoDao()
         val tareaDao = database.tareaDao()
         val recordatorioDao = database.recordatorioDao()
@@ -119,7 +163,7 @@ class CloudSync(
         recordatorioDao.deleteAll()
         contextoDao.deleteAll()
         val keyToId = mutableMapOf<String, Long>()
-        snapshot.contextos.sortedBy { it.orden }.forEach { item ->
+        merged.contextos.sortedBy { it.orden }.forEach { item ->
             val id = contextoDao.insert(
                 ContextoEntity(
                     id = 0,
@@ -135,7 +179,7 @@ class CloudSync(
             keyToId[item.cloudKey] = id
         }
         val fallbackId = keyToId.values.firstOrNull() ?: Contexto.FALLBACK_ID
-        snapshot.tareas.forEach { item ->
+        merged.tareas.forEach { item ->
             tareaDao.insertTarea(
                 TareaEntity(
                     id = 0,
@@ -155,7 +199,7 @@ class CloudSync(
                 ),
             )
         }
-        snapshot.recordatorios.forEach { item ->
+        merged.recordatorios.forEach { item ->
             recordatorioDao.insert(
                 RecordatorioEntity(
                     id = 0,
@@ -171,7 +215,8 @@ class CloudSync(
         }
     }
 
-    private suspend fun pushLocked(token: String) {
+    /** The local store as a sync snapshot, with `cloudKey`s normalized. */
+    private suspend fun localSnapshot(): AuthApi.SyncSnapshot {
         val contextos = database.contextoDao().getAllOnce()
         val tareas = database.tareaDao().getAllOnce()
         val recordatorios = database.recordatorioDao().getAllOnce()
@@ -180,7 +225,7 @@ class CloudSync(
                 if (entity.id in 1L..4L) "default-${entity.id}" else UUID.randomUUID().toString()
             }
         }
-        val snapshot = AuthApi.SyncSnapshot(
+        return AuthApi.SyncSnapshot(
             contextos = contextos.map { entity ->
                 AuthApi.SyncContextoDto(
                     cloudKey = contextoKeyById.getValue(entity.id),
@@ -221,6 +266,18 @@ class CloudSync(
                 )
             },
         )
-        AuthApi.pushSync(token, snapshot).getOrThrow()
+    }
+
+    /**
+     * Pushes the whole local store.
+     *
+     * The pending flag is set *before* the network call and cleared only after
+     * it succeeds, so a failed or interrupted push leaves the local change
+     * protected from the next pull.
+     */
+    private suspend fun pushLocked(token: String) {
+        sessionStore.hasPendingPush = true
+        transport.push(token, localSnapshot()).getOrThrow()
+        sessionStore.hasPendingPush = false
     }
 }

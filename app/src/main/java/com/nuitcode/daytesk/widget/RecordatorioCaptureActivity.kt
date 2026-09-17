@@ -46,10 +46,12 @@ import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
+import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.persistRecordatorio
 import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Repeticion
+import com.nuitcode.daytesk.sync.CloudSync
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
@@ -97,13 +99,25 @@ class RecordatorioCaptureActivity : ComponentActivity() {
      * dismisses the dialog. [persistRecordatorio] schedules notifications itself,
      * so the capture path never touches [com.nuitcode.daytesk.notification.ReminderScheduler]
      * directly.
+     *
+     * Sync: the capture must enqueue a push, otherwise the row exists only
+     * locally until the next app start — where a pull used to delete it
+     * (RESIL-004). The pending-push flag is set *before* the write so the row is
+     * protected even if the process dies before the push runs, and the push is
+     * scheduled on [CloudSync]'s app-lifetime scope because this Activity
+     * finishes immediately.
      */
     private fun persistAndFinish(recordatorio: Recordatorio) {
+        val appContext = applicationContext
+        val sessionStore = SessionStore(appContext)
+        val sync = CloudSync(appContext, AppDatabase.getInstance(appContext), sessionStore)
         lifecycleScope.launch {
             withContext(Dispatchers.IO) {
-                val dao = AppDatabase.getInstance(this@RecordatorioCaptureActivity).recordatorioDao()
-                persistRecordatorio(this@RecordatorioCaptureActivity, dao, recordatorio)
+                val dao = AppDatabase.getInstance(appContext).recordatorioDao()
+                sessionStore.hasPendingPush = true
+                persistRecordatorio(appContext, dao, recordatorio)
             }
+            CloudSync.schedulePush(sync)
             finish()
         }
     }

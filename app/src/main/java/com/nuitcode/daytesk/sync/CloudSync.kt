@@ -1,6 +1,7 @@
 package com.nuitcode.daytesk.sync
 
 import android.content.Context
+import androidx.room.withTransaction
 import com.nuitcode.daytesk.auth.AuthApi
 import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.ContextoSeed
@@ -152,66 +153,73 @@ class CloudSync(
     /**
      * Replaces the local store with the remote snapshot, keeping any row that
      * exists only locally (see [mergePreservingLocal]).
+     *
+     * The whole wipe + re-insert runs inside one [withSyncTransaction], so a
+     * crash or DB error mid-pull can never leave the local store empty or
+     * half-applied (RESIL-002). The local snapshot is read inside the same
+     * transaction, so the merge cannot observe a concurrent write either.
      */
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {
-        val merged = snapshot.mergePreservingLocal(localSnapshot())
+        database.withSyncTransaction {
+            val merged = snapshot.mergePreservingLocal(localSnapshot())
 
-        val contextoDao = database.contextoDao()
-        val tareaDao = database.tareaDao()
-        val recordatorioDao = database.recordatorioDao()
-        tareaDao.deleteAll()
-        recordatorioDao.deleteAll()
-        contextoDao.deleteAll()
-        val keyToId = mutableMapOf<String, Long>()
-        merged.contextos.sortedBy { it.orden }.forEach { item ->
-            val id = contextoDao.insert(
-                ContextoEntity(
-                    id = 0,
-                    nombre = item.nombre,
-                    color = item.color,
-                    iconId = item.iconId,
-                    orden = item.orden,
-                    esDefault = item.esDefault,
-                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                    updatedAt = item.updatedAt,
-                ),
-            )
-            keyToId[item.cloudKey] = id
-        }
-        val fallbackId = keyToId.values.firstOrNull() ?: Contexto.FALLBACK_ID
-        merged.tareas.forEach { item ->
-            tareaDao.insertTarea(
-                TareaEntity(
-                    id = 0,
-                    titulo = item.titulo,
-                    descripcion = item.descripcion,
-                    prioridad = item.prioridad,
-                    contextoId = keyToId[item.contextoKey] ?: fallbackId,
-                    estado = item.estado,
-                    fechaCreacion = item.fechaCreacion,
-                    fechaVencimiento = item.fechaVencimiento,
-                    fechaCompletada = item.fechaCompletada,
-                    orden = item.orden,
-                    repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
-                        .getOrDefault(Repeticion.NINGUNA).name,
-                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                    updatedAt = item.updatedAt,
-                ),
-            )
-        }
-        merged.recordatorios.forEach { item ->
-            recordatorioDao.insert(
-                RecordatorioEntity(
-                    id = 0,
-                    texto = item.texto,
-                    fecha = item.fecha,
-                    repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
-                        .getOrDefault(Repeticion.NINGUNA).name,
-                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                    updatedAt = item.updatedAt,
-                    fechaCreacion = item.fechaCreacion,
-                ),
-            )
+            val contextoDao = database.contextoDao()
+            val tareaDao = database.tareaDao()
+            val recordatorioDao = database.recordatorioDao()
+            tareaDao.deleteAll()
+            recordatorioDao.deleteAll()
+            contextoDao.deleteAll()
+            val keyToId = mutableMapOf<String, Long>()
+            merged.contextos.sortedBy { it.orden }.forEach { item ->
+                val id = contextoDao.insert(
+                    ContextoEntity(
+                        id = 0,
+                        nombre = item.nombre,
+                        color = item.color,
+                        iconId = item.iconId,
+                        orden = item.orden,
+                        esDefault = item.esDefault,
+                        cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                        updatedAt = item.updatedAt,
+                    ),
+                )
+                keyToId[item.cloudKey] = id
+            }
+            val fallbackId = keyToId.values.firstOrNull() ?: Contexto.FALLBACK_ID
+            merged.tareas.forEach { item ->
+                tareaDao.insertTarea(
+                    TareaEntity(
+                        id = 0,
+                        titulo = item.titulo,
+                        descripcion = item.descripcion,
+                        prioridad = item.prioridad,
+                        contextoId = keyToId[item.contextoKey] ?: fallbackId,
+                        estado = item.estado,
+                        fechaCreacion = item.fechaCreacion,
+                        fechaVencimiento = item.fechaVencimiento,
+                        fechaCompletada = item.fechaCompletada,
+                        orden = item.orden,
+                        repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
+                            .getOrDefault(Repeticion.NINGUNA).name,
+                        cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                        updatedAt = item.updatedAt,
+                    ),
+                )
+            }
+            merged.recordatorios.forEach { item ->
+                recordatorioDao.insert(
+                    RecordatorioEntity(
+                        id = 0,
+                        texto = item.texto,
+                        fecha = item.fecha,
+                        repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
+                            .getOrDefault(Repeticion.NINGUNA).name,
+                        cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                        updatedAt = item.updatedAt,
+                        fechaCreacion = item.fechaCreacion,
+                    ),
+                )
+            }
         }
     }
 

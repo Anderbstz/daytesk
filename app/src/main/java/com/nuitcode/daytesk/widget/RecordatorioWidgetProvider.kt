@@ -54,7 +54,19 @@ class RecordatorioWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            ACTION_TICK -> refresh(context)
+            ACTION_TICK -> {
+                // Hold the broadcast's work slot until the render lands; a
+                // detached refresh could be killed mid-flight, leaving the row
+                // stale until the next tick.
+                val pending = goAsync()
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        refreshNow(context)
+                    } finally {
+                        pending.finish()
+                    }
+                }
+            }
             else -> super.onReceive(context, intent)
         }
     }
@@ -98,21 +110,32 @@ class RecordatorioWidgetProvider : AppWidgetProvider() {
         private const val REQUEST_TICK = 72
 
         /**
-         * Re-renders every placed instance.
+         * Fire-and-forget re-render of every placed instance.
          *
          * Called after any recordatorio create, edit, delete or repetition roll,
-         * and alongside the task widget's own refresh on sync/boot.
+         * and alongside the task widget's own refresh on sync/boot. The render
+         * runs on a detached scope, so a caller that owns a `goAsync()` work
+         * slot must call [refreshNow] instead — otherwise the process can be
+         * killed right after `finish()` and the render is silently dropped.
          */
         fun refresh(context: Context) {
+            CoroutineScope(Dispatchers.IO).launch { refreshNow(context) }
+        }
+
+        /**
+         * Awaitable re-render: returns only once every placed instance has been
+         * updated, so a `goAsync()` caller can keep its work slot open until the
+         * render is on screen. Used by the [ACTION_TICK] path and by
+         * [com.nuitcode.daytesk.notification.BootReceiver].
+         */
+        suspend fun refreshNow(context: Context) {
             val manager = AppWidgetManager.getInstance(context)
             val ids = manager.getAppWidgetIds(
                 ComponentName(context, RecordatorioWidgetProvider::class.java),
             )
             if (ids.isEmpty()) return
-            CoroutineScope(Dispatchers.IO).launch {
-                val views = buildViews(context)
-                ids.forEach { id -> manager.updateAppWidget(id, views) }
-            }
+            val views = buildViews(context)
+            ids.forEach { id -> manager.updateAppWidget(id, views) }
         }
 
         private suspend fun buildViews(context: Context): RemoteViews {

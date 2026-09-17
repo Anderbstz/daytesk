@@ -33,7 +33,10 @@ class BootReceiver : BroadcastReceiver() {
                     .map { it.toDomain() }
                 ReminderScheduler.rescheduleRecordatorios(context, recordatorios)
                 NextTaskWidgetProvider.refresh(context)
-                RecordatorioWidgetProvider.refresh(context)
+                // Awaited: the recordatorio render must finish before the
+                // goAsync slot is released, or a kill right after finish()
+                // would drop it and leave the widget stale until the next tick.
+                RecordatorioWidgetProvider.refreshNow(context)
             } finally {
                 pending.finish()
             }

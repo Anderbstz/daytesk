@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -426,6 +428,8 @@ private fun DayteskNavScaffold(
     val context = LocalContext.current
     val pluginStore = remember { com.nuitcode.daytesk.data.HomePluginStore(context) }
     var homePlugins by remember { mutableStateOf(pluginStore.load()) }
+    // Anchors the Inicio FAB dropdown; only the Inicio branch ever opens it.
+    var menu by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier,
@@ -439,15 +443,50 @@ private fun DayteskNavScaffold(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onShowNuevaTarea,
-                containerColor = DayteskColors.Primary,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(56.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
+            when (currentEntry) {
+                is Recordatorios -> Fab(
+                    onClick = onNewRecordatorio,
+                    icon = Icons.Default.Notifications,
+                    contentDescription = "Nuevo recordatorio",
+                )
+                is Inicio -> Box {
+                    FloatingActionButton(
+                        onClick = { menu = true },
+                        containerColor = DayteskColors.Primary,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier.size(56.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Agregar",
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menu,
+                        onDismissRequest = { menu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Nueva tarea") },
+                            onClick = {
+                                menu = false
+                                onShowNuevaTarea()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Nuevo recordatorio") },
+                            onClick = {
+                                menu = false
+                                onNewRecordatorio()
+                            },
+                        )
+                    }
+                }
+                // Tareas and every other route (Perfil, Utilidades, sub-routes)
+                // keep the original task-creation behavior.
+                else -> Fab(
+                    onClick = onShowNuevaTarea,
+                    icon = Icons.Default.Add,
                     contentDescription = "Agregar tarea",
                 )
             }
@@ -607,6 +646,26 @@ entry<Utilidades> {
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+
+@Composable
+private fun Fab(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = DayteskColors.Primary,
+        contentColor = Color.White,
+        shape = CircleShape,
+        modifier = Modifier.size(56.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+        )
+    }
+}
 
 @Composable
 private fun DeferredUtilityScreen(title: String) {

@@ -45,7 +45,7 @@ class MainScreenTest {
     @Test
     fun bottomNav_showsFiveTabs() {
         composeTestRule.onNodeWithText("Inicio").assertExists()
-        composeTestRule.onNodeWithText("Inbox").assertExists()
+        composeTestRule.onNodeWithText("Recordatorios").assertExists()
         composeTestRule.onNodeWithText("Tareas").assertExists()
         composeTestRule.onNodeWithText("Utilidades").assertExists()
         composeTestRule.onNodeWithText("Perfil").assertExists()
@@ -66,7 +66,7 @@ class MainScreenTest {
     @Test
     fun bottomNav_allFiveTabsAreDisplayed() {
         composeTestRule.onNodeWithText("Inicio").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Inbox").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Recordatorios").assertIsDisplayed()
         composeTestRule.onNodeWithText("Tareas").assertIsDisplayed()
         composeTestRule.onNodeWithText("Utilidades").assertIsDisplayed()
         composeTestRule.onNodeWithText("Perfil").assertIsDisplayed()
@@ -77,7 +77,7 @@ class MainScreenTest {
     @Test
     fun quickStatsRow_allThreeCardsRender() {
         composeTestRule.onNodeWithText("Hoy").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Inbox").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Recordatorios").assertIsDisplayed()
         composeTestRule.onNodeWithText("Hechas").assertIsDisplayed()
     }
 
@@ -189,7 +189,7 @@ private class FakeInstantRepository : DataRepository {
             DayteskData(
                 stats = DayteskStats(
                     tareasHoy = 3,
-                    inboxPendientes = 5,
+                    recordatoriosPendientes = 5,
                     tareasCompletadas = 1,
                     rachaActual = 7,
                     totalCompletadasHistorico = 42,
@@ -198,7 +198,7 @@ private class FakeInstantRepository : DataRepository {
                 tareasHoy = MockData.tareasHoy,
                 tareasSemana = MockData.tareasSemana,
                 completadas = MockData.completadas,
-                inbox = MockData.inboxItems,
+                recordatorios = MockData.recordatorios,
                 alertas = MockData.alertas,
                 weeklyReview = MockData.weeklyReview,
                 contextos = Contexto.DEFAULTS,

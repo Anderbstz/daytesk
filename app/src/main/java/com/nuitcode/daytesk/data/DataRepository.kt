@@ -1,8 +1,7 @@
 package com.nuitcode.daytesk.data
 
 import com.nuitcode.daytesk.data.local.ContextoDao
-import com.nuitcode.daytesk.data.local.InboxItemDao
-import com.nuitcode.daytesk.data.local.InboxItemEntity
+import com.nuitcode.daytesk.data.local.RecordatorioDao
 import com.nuitcode.daytesk.data.local.TareaDao
 import com.nuitcode.daytesk.data.local.toDomain
 import com.nuitcode.daytesk.model.Contexto
@@ -19,14 +18,14 @@ interface DataRepository {
 
 class DefaultDataRepository(
     private val tareaDao: TareaDao,
-    private val inboxItemDao: InboxItemDao,
+    private val recordatorioDao: RecordatorioDao,
     private val contextoDao: ContextoDao,
 ) : DataRepository {
     override val data: Flow<DayteskData> = combine(
         tareaDao.getAllTareas(),
-        inboxItemDao.getAllItems(),
+        recordatorioDao.getAllRecordatorios(),
         contextoDao.getAllFlow(),
-    ) { tareaEntities, inboxEntities, contextoEntities ->
+    ) { tareaEntities, recordatorioEntities, contextoEntities ->
         val contextos = contextoEntities.map { it.toDomain() }
         val contextosById = contextos.associateBy { it.id }
         val fallback = Contexto.FALLBACK
@@ -59,7 +58,7 @@ class DefaultDataRepository(
         DayteskData(
             stats = DayteskStats(
                 tareasHoy = hoy.size,
-                inboxPendientes = inboxItems(inboxEntities).size,
+                recordatoriosPendientes = recordatorioEntities.size,
                 tareasCompletadas = completadas.size,
                 rachaActual = racha,
                 totalCompletadasHistorico = completadas.size,
@@ -67,7 +66,7 @@ class DefaultDataRepository(
             tareasHoy = hoy,
             tareasSemana = semana,
             completadas = completadas,
-            inbox = inboxItems(inboxEntities),
+            recordatorios = recordatorioEntities.map { it.toDomain() },
             alertas = emptyList(),
             contextos = contextos,
             weeklyReview = emptyList(),
@@ -82,15 +81,12 @@ class DefaultDataRepository(
                 tareasHoy = emptyList(),
                 tareasSemana = emptyList(),
                 completadas = emptyList(),
-                inbox = emptyList(),
+                recordatorios = emptyList(),
                 alertas = emptyList(),
                 contextos = Contexto.DEFAULTS,
             ),
         )
     }
-
-    private fun inboxItems(entities: List<InboxItemEntity>) =
-        entities.map { it.toDomain() }
 
     private fun esHoy(tarea: Tarea): Boolean {
         val venc = tarea.fechaVencimiento ?: return false

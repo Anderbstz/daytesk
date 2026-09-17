@@ -19,6 +19,46 @@ class SessionStore(context: Context) {
         get() = prefs.getString(KEY_EMAIL, "") ?: ""
         private set(value) { prefs.edit().putString(KEY_EMAIL, value).apply() }
 
+    /**
+     * Whether local reminders are allowed to schedule and show. Defaults to
+     * `true` and is preserved by [clear], so logging out does not silently
+     * re-enable notifications the user turned off.
+     */
+    var notificationsEnabled: Boolean
+        get() = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
+        set(value) { prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, value).apply() }
+
+    /**
+     * `true` while a local change has not been confirmed by the server.
+     *
+     * Set before a push starts and cleared only after it succeeds, so a change
+     * made while the push fails (or while the process dies mid-push) is never
+     * overwritten by the next pull.
+     */
+    var hasPendingPush: Boolean
+        get() = prefs.getBoolean(KEY_PENDING_PUSH, false)
+        set(value) { prefs.edit().putBoolean(KEY_PENDING_PUSH, value).apply() }
+
+    /**
+     * Message of the last failed sync, or `null` when the last attempt
+     * succeeded.
+     *
+     * Sync failures used to be discarded by a bare `runCatching`, so a push that
+     * failed looked identical to one that worked. Persisting the message makes
+     * the failure observable (RESIL-003).
+     */
+    var lastSyncError: String?
+        get() = prefs.getString(KEY_LAST_SYNC_ERROR, null)
+        set(value) {
+            val editor = prefs.edit()
+            if (value == null) {
+                editor.remove(KEY_LAST_SYNC_ERROR)
+            } else {
+                editor.putString(KEY_LAST_SYNC_ERROR, value)
+            }
+            editor.apply()
+        }
+
     val hadPreviousAccount: Boolean
         get() = prefs.getBoolean(KEY_HAD_ACCOUNT, false)
 
@@ -73,9 +113,13 @@ class SessionStore(context: Context) {
     fun clear() {
         val hadAccount = hadPreviousAccount || isLoggedIn
         val previousEmail = prefs.getString(KEY_EMAIL, null)
+        // Preserved across logout: the toggle is a device preference, not
+        // account state (D6 in the quick-reminders design).
+        val notificationsEnabled = notificationsEnabled
         prefs.edit()
             .clear()
             .putBoolean(KEY_HAD_ACCOUNT, hadAccount)
+            .putBoolean(KEY_NOTIFICATIONS_ENABLED, notificationsEnabled)
             .apply()
         if (!previousEmail.isNullOrBlank()) {
             prefs.edit().putString(KEY_PREVIOUS_EMAIL, previousEmail).apply()
@@ -98,5 +142,8 @@ class SessionStore(context: Context) {
         private const val KEY_KEEP_LOCAL = "keep_local"
         private const val KEY_HAD_ACCOUNT = "had_account"
         private const val KEY_PREVIOUS_EMAIL = "previous_email"
+        private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        private const val KEY_PENDING_PUSH = "pending_push"
+        private const val KEY_LAST_SYNC_ERROR = "last_sync_error"
     }
 }

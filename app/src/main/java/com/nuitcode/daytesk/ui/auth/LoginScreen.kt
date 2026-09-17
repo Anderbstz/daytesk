@@ -177,7 +177,7 @@ fun LoginScreen(
                             if (registerMode) {
                                 withContext(Dispatchers.IO) {
                                     database.tareaDao().deleteAll()
-                                    database.inboxItemDao().deleteAll()
+                                    database.recordatorioDao().deleteAll()
                                 }
                             }
                             sessionStore.save(
@@ -259,7 +259,7 @@ fun LoginScreen(
                         scope.launch {
                             withContext(Dispatchers.IO) {
                                 database.tareaDao().deleteAll()
-                                database.inboxItemDao().deleteAll()
+                                database.recordatorioDao().deleteAll()
                             }
                             sessionStore.save(
                                 session.token,

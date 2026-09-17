@@ -1,5 +1,8 @@
 package com.nuitcode.daytesk.auth
 
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -8,6 +11,24 @@ import java.net.URL
 object AuthApi {
     /** Producción (Render). En local sin deploy, usá http://10.0.2.2:8080 */
     const val BASE_URL = "https://daytesk.onrender.com"
+
+    /**
+     * Dispatcher that owns every blocking HTTP round trip.
+     *
+     * `HttpURLConnection` is a blocking API: calling it on the main thread
+     * throws `NetworkOnMainThreadException`. Every network entry point in this
+     * object routes through [dispatchNetwork], so the socket work always runs
+     * off the caller's thread even when it is invoked from a Compose
+     * `LaunchedEffect` / `rememberCoroutineScope` on the main dispatcher.
+     *
+     * The seam is a single property so the boundary is testable and there is
+     * exactly one place to audit.
+     */
+    internal var networkDispatcher: CoroutineDispatcher = Dispatchers.IO
+
+    /** Runs [block] on [networkDispatcher]; the single network boundary. */
+    internal suspend fun <T> dispatchNetwork(block: () -> T): T =
+        withContext(networkDispatcher) { block() }
 
     data class LoginResult(
         val token: String,
@@ -18,9 +39,59 @@ object AuthApi {
     data class SyncSnapshot(
         val contextos: List<SyncContextoDto>,
         val tareas: List<SyncTareaDto>,
-        val inbox: List<SyncInboxDto>,
+        val recordatorios: List<SyncRecordatorioDto>,
     ) {
-        fun isEmpty(): Boolean = contextos.isEmpty() && tareas.isEmpty() && inbox.isEmpty()
+        fun isEmpty(): Boolean = contextos.isEmpty() && tareas.isEmpty() && recordatorios.isEmpty()
+
+        fun toJson(): JSONObject {
+            val contextosJson = JSONArray()
+            contextos.forEach { item ->
+                contextosJson.put(
+                    JSONObject()
+                        .put("cloudKey", item.cloudKey)
+                        .put("nombre", item.nombre)
+                        .put("color", item.color)
+                        .put("iconId", item.iconId ?: JSONObject.NULL)
+                        .put("orden", item.orden)
+                        .put("esDefault", item.esDefault)
+                        .put("updatedAt", item.updatedAt),
+                )
+            }
+            val tareasJson = JSONArray()
+            tareas.forEach { item ->
+                tareasJson.put(
+                    JSONObject()
+                        .put("cloudKey", item.cloudKey)
+                        .put("titulo", item.titulo)
+                        .put("descripcion", item.descripcion)
+                        .put("prioridad", item.prioridad)
+                        .put("contextoKey", item.contextoKey)
+                        .put("estado", item.estado)
+                        .put("fechaCreacion", item.fechaCreacion)
+                        .put("fechaVencimiento", item.fechaVencimiento ?: JSONObject.NULL)
+                        .put("fechaCompletada", item.fechaCompletada ?: JSONObject.NULL)
+                        .put("orden", item.orden)
+                        .put("repeticion", item.repeticion)
+                        .put("updatedAt", item.updatedAt),
+                )
+            }
+            val recordatoriosJson = JSONArray()
+            recordatorios.forEach { item ->
+                recordatoriosJson.put(
+                    JSONObject()
+                        .put("cloudKey", item.cloudKey)
+                        .put("texto", item.texto)
+                        .put("fecha", item.fecha)
+                        .put("repeticion", item.repeticion)
+                        .put("fechaCreacion", item.fechaCreacion)
+                        .put("updatedAt", item.updatedAt),
+                )
+            }
+            return JSONObject()
+                .put("contextos", contextosJson)
+                .put("tareas", tareasJson)
+                .put("recordatorios", recordatoriosJson)
+        }
     }
 
     data class SyncContextoDto(
@@ -48,22 +119,23 @@ object AuthApi {
         val updatedAt: Long,
     )
 
-    data class SyncInboxDto(
+    data class SyncRecordatorioDto(
         val cloudKey: String,
         val texto: String,
-        val timestamp: Long,
-        val procesado: Boolean,
+        val fecha: Long,
+        val repeticion: String,
+        val fechaCreacion: Long,
         val updatedAt: Long,
     )
 
-    fun login(identifier: String, password: String): Result<LoginResult> {
+    suspend fun login(identifier: String, password: String): Result<LoginResult> {
         val payload = JSONObject()
             .put("identifier", identifier.trim())
             .put("password", password)
-        return authCall("/auth/login", payload)
+        return dispatchNetwork { authCall("/auth/login", payload) }
     }
 
-    fun register(
+    suspend fun register(
         email: String,
         username: String,
         password: String,
@@ -74,17 +146,21 @@ object AuthApi {
             .put("username", username.trim())
             .put("password", password)
             .put("displayName", displayName.trim().ifBlank { username.trim() })
-        return authCall("/auth/register", payload)
+        return dispatchNetwork { authCall("/auth/register", payload) }
     }
 
-    fun pullSync(token: String): Result<SyncSnapshot> {
-        return request("GET", "/sync", token).mapCatching { body ->
-            parseSnapshot(JSONObject(body))
+    suspend fun pullSync(token: String): Result<SyncSnapshot> {
+        return dispatchNetwork {
+            request("GET", "/sync", token).mapCatching { body ->
+                parseSnapshot(JSONObject(body))
+            }
         }
     }
 
-    fun pushSync(token: String, snapshot: SyncSnapshot): Result<Unit> {
-        return request("PUT", "/sync", token, snapshot.toJson()).map { }
+    suspend fun pushSync(token: String, snapshot: SyncSnapshot): Result<Unit> {
+        return dispatchNetwork {
+            request("PUT", "/sync", token, snapshot.toJson()).map { }
+        }
     }
 
     private fun authCall(path: String, payload: JSONObject): Result<LoginResult> {
@@ -175,7 +251,7 @@ object AuthApi {
         return trimmed.startsWith("{") || trimmed.startsWith("[")
     }
 
-    private fun parseSnapshot(json: JSONObject): SyncSnapshot {
+    internal fun parseSnapshot(json: JSONObject): SyncSnapshot {
         val contextos = json.optJSONArray("contextos").orEmpty().mapObjects { item ->
             SyncContextoDto(
                 cloudKey = item.getString("cloudKey"),
@@ -203,65 +279,17 @@ object AuthApi {
                 updatedAt = item.optLong("updatedAt"),
             )
         }
-        val inbox = json.optJSONArray("inbox").orEmpty().mapObjects { item ->
-            SyncInboxDto(
+        val recordatorios = json.optJSONArray("recordatorios").orEmpty().mapObjects { item ->
+            SyncRecordatorioDto(
                 cloudKey = item.getString("cloudKey"),
                 texto = item.getString("texto"),
-                timestamp = item.getLong("timestamp"),
-                procesado = item.optBoolean("procesado"),
+                fecha = item.getLong("fecha"),
+                repeticion = item.optString("repeticion", "NINGUNA"),
+                fechaCreacion = item.optLong("fechaCreacion"),
                 updatedAt = item.optLong("updatedAt"),
             )
         }
-        return SyncSnapshot(contextos, tareas, inbox)
-    }
-
-    private fun SyncSnapshot.toJson(): JSONObject {
-        val contextosJson = JSONArray()
-        contextos.forEach { item ->
-            contextosJson.put(
-                JSONObject()
-                    .put("cloudKey", item.cloudKey)
-                    .put("nombre", item.nombre)
-                    .put("color", item.color)
-                    .put("iconId", item.iconId ?: JSONObject.NULL)
-                    .put("orden", item.orden)
-                    .put("esDefault", item.esDefault)
-                    .put("updatedAt", item.updatedAt),
-            )
-        }
-        val tareasJson = JSONArray()
-        tareas.forEach { item ->
-            tareasJson.put(
-                JSONObject()
-                    .put("cloudKey", item.cloudKey)
-                    .put("titulo", item.titulo)
-                    .put("descripcion", item.descripcion)
-                    .put("prioridad", item.prioridad)
-                    .put("contextoKey", item.contextoKey)
-                    .put("estado", item.estado)
-                    .put("fechaCreacion", item.fechaCreacion)
-                    .put("fechaVencimiento", item.fechaVencimiento ?: JSONObject.NULL)
-                    .put("fechaCompletada", item.fechaCompletada ?: JSONObject.NULL)
-                    .put("orden", item.orden)
-                    .put("repeticion", item.repeticion)
-                    .put("updatedAt", item.updatedAt),
-            )
-        }
-        val inboxJson = JSONArray()
-        inbox.forEach { item ->
-            inboxJson.put(
-                JSONObject()
-                    .put("cloudKey", item.cloudKey)
-                    .put("texto", item.texto)
-                    .put("timestamp", item.timestamp)
-                    .put("procesado", item.procesado)
-                    .put("updatedAt", item.updatedAt),
-            )
-        }
-        return JSONObject()
-            .put("contextos", contextosJson)
-            .put("tareas", tareasJson)
-            .put("inbox", inboxJson)
+        return SyncSnapshot(contextos, tareas, recordatorios)
     }
 
     private fun JSONArray?.orEmpty(): JSONArray = this ?: JSONArray()

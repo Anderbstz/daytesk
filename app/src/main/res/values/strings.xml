@@ -1,4 +1,7 @@
 <resources>
     <string name="app_name">Daytesk</string>
     <string name="widget_description">Muestra la próxima tarea importante en la pantalla de inicio.</string>
+    <string name="widget_recordatorio_description">Crea un recordatorio en dos toques desde la pantalla de inicio.</string>
+    <string name="widget_recordatorio_title">Nuevo recordatorio</string>
+    <string name="widget_recordatorio_hint">Toca para agendar</string>
 </resources>

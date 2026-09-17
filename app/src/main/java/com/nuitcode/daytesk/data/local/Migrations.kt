@@ -65,6 +65,7 @@ object Migrations {
                         WHEN 'TRABAJO' THEN 2
                         WHEN 'PERSONAL' THEN 3
                         WHEN 'SALUD' THEN 4
+                        ELSE 3
                     END
                     """.trimIndent(),
                 )
@@ -97,6 +98,76 @@ object Migrations {
             db.execSQL("ALTER TABLE `inbox_items` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
             db.execSQL("ALTER TABLE `contextos` ADD COLUMN `cloudKey` TEXT NOT NULL DEFAULT ''")
             db.execSQL("ALTER TABLE `contextos` ADD COLUMN `updatedAt` INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    /**
+     * Canonical DDL for the `recordatorios` table.
+     *
+     * Exposed as a literal so [MIGRATION_4_5] and `MigrationTest` execute the
+     * exact same statement — the test can never drift from production DDL.
+     *
+     * Column order mirrors [RecordatorioEntity]'s declaration order so the
+     * generated Room schema matches this statement byte-for-byte.
+     */
+    const val CREATE_RECORDATORIOS_DDL: String =
+        "CREATE TABLE IF NOT EXISTS `recordatorios` (" +
+            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+            "`texto` TEXT NOT NULL, " +
+            "`fecha` INTEGER NOT NULL, " +
+            "`repeticion` TEXT NOT NULL, " +
+            "`cloudKey` TEXT NOT NULL, " +
+            "`updatedAt` INTEGER NOT NULL, " +
+            "`fechaCreacion` INTEGER NOT NULL)"
+
+    /**
+     * **MIGRATION_4_5** — introduces the `recordatorios` table.
+     *
+     * The `inbox_items` drop deliberately did NOT ship here: `InboxItemEntity`
+     * was still part of [AppDatabase.entities] at v5, so dropping its table in
+     * this migration would have failed Room's on-open schema validation
+     * (`IllegalStateException`) on an upgraded v4 database. The drop moved to
+     * [MIGRATION_5_6] once the Inbox entity/DAO were removed from the database.
+     * This migration is historical and MUST NOT be edited.
+     */
+    val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL(CREATE_RECORDATORIOS_DDL)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
+
+    /**
+     * Canonical statement that drops the retired `inbox_items` table.
+     *
+     * Exposed as a literal so [MIGRATION_5_6] and `MigrationTest` execute the
+     * exact same statement — the test can never drift from production DDL.
+     */
+    const val DROP_INBOX_ITEMS_DDL: String = "DROP TABLE IF EXISTS `inbox_items`"
+
+    /**
+     * **MIGRATION_5_6** — removes the `inbox_items` table after the Inbox
+     * entity and DAO were deleted from [AppDatabase].
+     *
+     * Existing inbox rows are intentionally discarded, never migrated: the
+     * spec records "inbox (REMOVED) / Migration: None". `IF EXISTS` keeps the
+     * migration safe on databases where the table was already absent. Runs in
+     * a transaction like every other migration.
+     */
+    val MIGRATION_5_6: Migration = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL(DROP_INBOX_ITEMS_DDL)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
         }
     }
 }

@@ -11,8 +11,8 @@ data class Tarea(
     val contextoId: Long = Contexto.FALLBACK_ID,
     /**
      * Resolved `Contexto` for this `Tarea`. Populated by
-     * `DefaultDataRepository.data` from the 3-way combine (tareas + inbox +
-     * contextos). Defaults to [Contexto.DEFAULTS] (PERSONAL) so freshly
+     * `DefaultDataRepository.data` from the 3-way combine (tareas +
+     * recordatorios + contextos). Defaults to [Contexto.DEFAULTS] (PERSONAL) so freshly
      * built `Tarea` instances carry a sensible value before the repository
      * resolves the FK.
      */

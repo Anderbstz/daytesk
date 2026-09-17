@@ -2,12 +2,12 @@ package com.nuitcode.daytesk.data
 
 import com.nuitcode.daytesk.model.Alerta
 import com.nuitcode.daytesk.model.Contexto
-import com.nuitcode.daytesk.model.InboxItem
+import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Tarea
 
 data class DayteskStats(
     val tareasHoy: Int,
-    val inboxPendientes: Int,
+    val recordatoriosPendientes: Int,
     val tareasCompletadas: Int,
     val rachaActual: Int = 0,
     val totalCompletadasHistorico: Int = 0,
@@ -19,7 +19,11 @@ data class DayteskData(
     val tareasHoy: List<Tarea>,
     val tareasSemana: List<Tarea>,
     val completadas: List<Tarea>,
-    val inbox: List<InboxItem>,
+    /**
+     * Upcoming reminders ordered by `fecha` ascending (soonest first).
+     * Populated by [DefaultDataRepository.data] from the `recordatorios` table.
+     */
+    val recordatorios: List<Recordatorio>,
     val alertas: List<Alerta>,
     /**
      * User-managed contexts in display order (orden ASC). Populated by

@@ -35,6 +35,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".widget.RecordatorioCaptureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.Daytesk.Dialog"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+
         <receiver
             android:name=".notification.BootReceiver"
             android:exported="false">
@@ -54,6 +61,16 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/next_task_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widget.RecordatorioWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/recordatorio_widget_info" />
         </receiver>
     </application>
 

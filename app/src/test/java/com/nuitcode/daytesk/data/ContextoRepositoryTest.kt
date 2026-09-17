@@ -279,9 +279,9 @@ class ContextoRepositoryTest {
     @Test
     fun contextos_emitsEntitiesInOrdenOrder() = runTest {
         val dao = FakeContextoDao().apply {
-            insert(ContextoEntity(id = 0, nombre = "zzz", color = 0, orden = 30))
-            insert(ContextoEntity(id = 0, nombre = "aaa", color = 0, orden = 10))
-            insert(ContextoEntity(id = 0, nombre = "mmm", color = 0, orden = 20))
+            insert(ContextoEntity(id = 0, nombre = "zzz", color = 0, orden = 30, esDefault = false))
+            insert(ContextoEntity(id = 0, nombre = "aaa", color = 0, orden = 10, esDefault = false))
+            insert(ContextoEntity(id = 0, nombre = "mmm", color = 0, orden = 20, esDefault = false))
         }
         val repo = DefaultContextoRepository(dao)
 

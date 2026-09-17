@@ -10,13 +10,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @Database(
-    entities = [TareaEntity::class, InboxItemEntity::class, ContextoEntity::class],
-    version = 4,
+    entities = [TareaEntity::class, RecordatorioEntity::class, ContextoEntity::class],
+    version = 6,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun tareaDao(): TareaDao
-    abstract fun inboxItemDao(): InboxItemDao
+    abstract fun recordatorioDao(): RecordatorioDao
     abstract fun contextoDao(): ContextoDao
 
     companion object {
@@ -35,7 +35,13 @@ abstract class AppDatabase : RoomDatabase() {
                 AppDatabase::class.java,
                 "daytesk.db",
             )
-                .addMigrations(Migrations.MIGRATION_1_2, Migrations.MIGRATION_2_3, Migrations.MIGRATION_3_4)
+                .addMigrations(
+                    Migrations.MIGRATION_1_2,
+                    Migrations.MIGRATION_2_3,
+                    Migrations.MIGRATION_3_4,
+                    Migrations.MIGRATION_4_5,
+                    Migrations.MIGRATION_5_6,
+                )
                 .addCallback(
                     object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
@@ -50,8 +56,8 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * First-install path. Seeds the 4 default `contextos`. Tareas e inbox
-         * empiezan vacíos y se sincronizan con la cuenta.
+         * First-install path. Seeds the 4 default `contextos`. Tareas y
+         * recordatorios empiezan vacíos y se sincronizan con la cuenta.
          */
         private suspend fun populateDatabase(db: AppDatabase) {
             val contextoDao = db.contextoDao()
@@ -62,7 +68,7 @@ abstract class AppDatabase : RoomDatabase() {
                     contextoDao.insert(seed.toEntity())
                 }
             }
-            // Tareas e inbox empiezan vacíos; se sincronizan con la cuenta.
+            // Tareas y recordatorios empiezan vacíos; se sincronizan con la cuenta.
         }
     }
 }

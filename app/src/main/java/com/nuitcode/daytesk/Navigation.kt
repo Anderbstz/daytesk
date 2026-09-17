@@ -1,5 +1,10 @@
 package com.nuitcode.daytesk
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,8 +25,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -34,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavKey
@@ -54,12 +61,15 @@ import com.nuitcode.daytesk.data.DayteskData
 import com.nuitcode.daytesk.data.DefaultContextoRepository
 import com.nuitcode.daytesk.data.DefaultDataRepository
 import com.nuitcode.daytesk.data.local.AppDatabase
-import com.nuitcode.daytesk.data.local.InboxItemDao
+import com.nuitcode.daytesk.data.local.RecordatorioDao
 import com.nuitcode.daytesk.data.local.TareaDao
 import com.nuitcode.daytesk.data.local.toEntity
 import com.nuitcode.daytesk.data.archiveExpiredTasks
+import com.nuitcode.daytesk.data.deleteRecordatorio
+import com.nuitcode.daytesk.data.persistRecordatorio
 import com.nuitcode.daytesk.data.persistTaskCompletion
-import com.nuitcode.daytesk.model.InboxItem
+import com.nuitcode.daytesk.data.rollExpiredRecordatorios
+import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.auth.SessionStore
@@ -71,16 +81,17 @@ import com.nuitcode.daytesk.theme.DayteskTypography
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.ui.contextos.ContextEditModal
 import com.nuitcode.daytesk.ui.contextos.ContextosScreen
-import com.nuitcode.daytesk.ui.inbox.InboxScreen
 import com.nuitcode.daytesk.ui.inicio.InicioScreen
 import com.nuitcode.daytesk.ui.main.DayteskUiState
 import com.nuitcode.daytesk.ui.main.MainScreenViewModel
 import com.nuitcode.daytesk.notification.ReminderScheduler
+import com.nuitcode.daytesk.notification.applyNotificationsEnabled
 import com.nuitcode.daytesk.ui.historial.HistorialScreen
 import com.nuitcode.daytesk.ui.modals.DetalleTareaModal
 import com.nuitcode.daytesk.ui.modals.NuevaTareaModal
-import com.nuitcode.daytesk.ui.modals.ProcesarInboxModal
 import com.nuitcode.daytesk.ui.modals.RevisionSemanalModal
+import com.nuitcode.daytesk.ui.recordatorios.RecordatorioModal
+import com.nuitcode.daytesk.ui.recordatorios.RecordatoriosScreen
 import com.nuitcode.daytesk.ui.perfil.AyudaScreen
 import com.nuitcode.daytesk.ui.perfil.ConfiguracionScreen
 import com.nuitcode.daytesk.ui.perfil.PerfilScreen
@@ -99,7 +110,7 @@ private data class TabItem(
 
 private val tabs = listOf(
     TabItem(Inicio, Icons.Default.Home, "Inicio"),
-    TabItem(Inbox, Icons.Default.Email, "Inbox"),
+    TabItem(Recordatorios, Icons.Default.Notifications, "Recordatorios"),
     TabItem(Tareas, Icons.Default.CheckCircle, "Tareas"),
     TabItem(Utilidades, Icons.Default.Build, "Utilidades"),
     TabItem(Perfil, Icons.Default.Person, "Perfil"),
@@ -115,9 +126,9 @@ fun DayteskApp(
     onLogout: () -> Unit = {},
 ) {
     val tareaDao = database.tareaDao()
-    val inboxItemDao = database.inboxItemDao()
+    val recordatorioDao = database.recordatorioDao()
     val contextoDao = database.contextoDao()
-    val repository = remember { DefaultDataRepository(tareaDao, inboxItemDao, contextoDao) }
+    val repository = remember { DefaultDataRepository(tareaDao, recordatorioDao, contextoDao) }
     val viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(repository) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -125,7 +136,8 @@ fun DayteskApp(
     var editingTarea by remember { mutableStateOf<Tarea?>(null) }
     var showRevisionSemanal by remember { mutableStateOf(false) }
     var detalleTareaSeleccionada by remember { mutableStateOf<Tarea?>(null) }
-    var procesarInboxSeleccionado by remember { mutableStateOf<InboxItem?>(null) }
+    var showRecordatorioModal by remember { mutableStateOf(false) }
+    var recordatorioEditando by remember { mutableStateOf<Recordatorio?>(null) }
     var showAddContexto by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -147,6 +159,7 @@ fun DayteskApp(
         }
         is DayteskUiState.Success -> {
             cachedData = state.data
+            RequestNotificationPermissionOnLaunch()
             LaunchedEffect(state.data, syncReady) {
                 if (!syncReady) return@LaunchedEffect
                 archiveExpiredTasks(context, tareaDao)
@@ -155,6 +168,10 @@ fun DayteskApp(
                     state.data.tareasHoy + state.data.tareasSemana +
                         state.data.otrasPendientes + state.data.vencidas,
                 )
+                // Roll recurring reminders forward, then re-register every
+                // alarm (both are idempotent with the receiver's own roll).
+                rollExpiredRecordatorios(context, database)
+                ReminderScheduler.rescheduleRecordatorios(context, state.data.recordatorios)
                 NextTaskWidgetProvider.refresh(context)
                 CloudSync.schedulePush(scope, cloudSync)
             }
@@ -162,13 +179,20 @@ fun DayteskApp(
                 data = state.data,
                 contextoRepository = contextoRepository,
                 tareaDao = tareaDao,
-                inboxItemDao = inboxItemDao,
+                recordatorioDao = recordatorioDao,
                 onShowNuevaTarea = {
                     editingTarea = null
                     showNuevaTarea = true
                 },
                 onShowDetalleTarea = { tarea -> detalleTareaSeleccionada = tarea },
-                onShowProcesarInbox = { item -> procesarInboxSeleccionado = item },
+                onNewRecordatorio = {
+                    recordatorioEditando = null
+                    showRecordatorioModal = true
+                },
+                onEditRecordatorio = { recordatorio ->
+                    recordatorioEditando = recordatorio
+                    showRecordatorioModal = true
+                },
                 onShowRevisionSemanal = { showRevisionSemanal = true },
                 onLogout = onLogout,
             )
@@ -243,47 +267,35 @@ fun DayteskApp(
         )
     }
 
-    // ── Modal: Procesar Inbox ──────────────────────────────────
-    cachedData?.let { currentData ->
-        procesarInboxSeleccionado?.let { item ->
-            ProcesarInboxModal(
-                item = item,
-                contextos = currentData.contextos,
-                canAddContexto = currentData.contextos.size < Contexto.MAX_COUNT,
-                onAddContexto = { showAddContexto = true },
-                onDismiss = { procesarInboxSeleccionado = null },
-                onSave = { contexto, prioridad, fecha ->
-                    scope.launch {
-                        val nuevaTarea = Tarea(
-                            id = 0,
-                            titulo = item.texto,
-                            descripcion = "",
-                            contextoId = contexto.id,
-                            contexto = contexto,
-                            prioridad = prioridad,
-                            estado = TareaEstado.PENDIENTE,
-                            fechaVencimiento = fecha,
-                        )
-                        val id = tareaDao.insertTarea(nuevaTarea.toEntity())
-                        ReminderScheduler.scheduleIfDue(context, id, nuevaTarea.titulo, fecha)
-                        inboxItemDao.deleteItem(item.toEntity())
-                        procesarInboxSeleccionado = null
-                    }
-                },
-                onDelete = {
-                    scope.launch {
-                        inboxItemDao.deleteItem(item.toEntity())
-                        procesarInboxSeleccionado = null
-                    }
-                },
-            )
-        }
+    // ── Modal: Nuevo/Editar Recordatorio ──────────────────────
+    if (showRecordatorioModal) {
+        RecordatorioModal(
+            initial = recordatorioEditando,
+            onDismiss = {
+                showRecordatorioModal = false
+                recordatorioEditando = null
+            },
+            onSave = { recordatorio ->
+                scope.launch {
+                    persistRecordatorio(context, recordatorioDao, recordatorio)
+                    showRecordatorioModal = false
+                    recordatorioEditando = null
+                }
+            },
+            onDelete = { recordatorio ->
+                scope.launch {
+                    deleteRecordatorio(context, recordatorioDao, recordatorio)
+                    showRecordatorioModal = false
+                    recordatorioEditando = null
+                }
+            },
+        )
     }
 
     cachedData?.let { currentData ->
         if (showRevisionSemanal) {
             RevisionSemanalModal(
-                inboxPendientes = currentData.stats.inboxPendientes,
+                recordatoriosPendientes = currentData.stats.recordatoriosPendientes,
                 tareasVencidas = currentData.vencidas.size,
                 tareasCompletadas = currentData.stats.tareasCompletadas,
                 onDismiss = { showRevisionSemanal = false },
@@ -312,6 +324,33 @@ fun DayteskApp(
     }
 }
 
+/**
+ * Requests `POST_NOTIFICATIONS` once the logged-in shell is on screen.
+ *
+ * The `rememberSaveable` guard makes the prompt fire at most once per launch:
+ * a configuration change (rotation) restores the flag instead of re-prompting,
+ * satisfying the "Prompt on launch" scenario without nagging the user.
+ */
+@Composable
+private fun RequestNotificationPermissionOnLaunch() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {},
+    )
+    var prompted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (prompted) return@LaunchedEffect
+        prompted = true
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+}
+
 // ── Test entry point (read-only, no CRUD) ─────────────────────
 
 @Composable
@@ -333,10 +372,11 @@ fun DayteskApp(
                 data = state.data,
                 contextoRepository = contextoRepository,
                 tareaDao = null,
-                inboxItemDao = null,
+                recordatorioDao = null,
                 onShowNuevaTarea = { showNuevaTarea = true },
                 onShowDetalleTarea = {},
-                onShowProcesarInbox = {},
+                onNewRecordatorio = {},
+                onEditRecordatorio = {},
                 onShowRevisionSemanal = {},
             )
         }
@@ -372,10 +412,11 @@ private fun DayteskNavScaffold(
     data: DayteskData,
     contextoRepository: ContextoRepository?,
     tareaDao: TareaDao?,
-    inboxItemDao: InboxItemDao?,
+    recordatorioDao: RecordatorioDao?,
     onShowNuevaTarea: () -> Unit,
     onShowDetalleTarea: (Tarea) -> Unit,
-    onShowProcesarInbox: (InboxItem) -> Unit,
+    onNewRecordatorio: () -> Unit,
+    onEditRecordatorio: (Recordatorio) -> Unit,
     onShowRevisionSemanal: () -> Unit,
     onLogout: () -> Unit = {},
 ) {
@@ -445,38 +486,18 @@ private fun DayteskNavScaffold(
                         onUnpinTask = { id -> homePlugins = pluginStore.unpin(id) },
                     )
                 }
-                entry<Inbox> {
-                    InboxScreen(
+                entry<Recordatorios> {
+                    RecordatoriosScreen(
                         data = data,
-                        onItemClick = { itemId ->
-                            data.inbox.find { it.id == itemId }?.let { onShowProcesarInbox(it) }
-                        },
-                        onProcessAll = {
-                            if (tareaDao != null && inboxItemDao != null) {
+                        onEdit = onEditRecordatorio,
+                        onDelete = { recordatorio ->
+                            if (recordatorioDao != null) {
                                 scope.launch {
-                                    val contexto = data.contextos.firstOrNull() ?: return@launch
-                                    data.inbox.forEach { item ->
-                                        val nueva = Tarea(
-                                            id = 0,
-                                            titulo = item.texto,
-                                            contextoId = contexto.id,
-                                            contexto = contexto,
-                                        )
-                                        tareaDao.insertTarea(nueva.toEntity())
-                                        inboxItemDao.deleteItem(item.toEntity())
-                                    }
+                                    deleteRecordatorio(context, recordatorioDao, recordatorio)
                                 }
                             }
                         },
-                        onAddItem = { texto ->
-                            if (inboxItemDao != null) {
-                                scope.launch {
-                                    inboxItemDao.insertItem(
-                                        InboxItem(id = 0, texto = texto).toEntity(),
-                                    )
-                                }
-                            }
-                        },
+                        onNew = onNewRecordatorio,
                     )
                 }
                 entry<Tareas> {
@@ -539,6 +560,22 @@ entry<Utilidades> {
                     ConfiguracionScreen(
                         onBack = { backStack.removeLastOrNull() },
                         onOpenWeeklyReview = onShowRevisionSemanal,
+                        onNotificationsChanged = { enabled ->
+                            scope.launch {
+                                val tareas = tareaDao
+                                val recordatorios = recordatorioDao
+                                if (tareas != null && recordatorios != null) {
+                                    applyNotificationsEnabled(
+                                        context,
+                                        enabled,
+                                        tareas,
+                                        recordatorios,
+                                    )
+                                } else {
+                                    SessionStore(context).notificationsEnabled = enabled
+                                }
+                            }
+                        },
                     )
                 }
                 entry<Ayuda> {

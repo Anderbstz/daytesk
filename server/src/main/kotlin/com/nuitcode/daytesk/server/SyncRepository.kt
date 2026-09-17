@@ -54,6 +54,22 @@ object SyncRepository {
                 )
                 """.trimIndent(),
             )
+            // `user_inbox` is retained (unused) on purpose so a code revert to
+            // the previous client still has its table and can resync.
+            statement.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_recordatorios (
+                    user_id BIGINT NOT NULL,
+                    cloud_key TEXT NOT NULL,
+                    texto TEXT NOT NULL,
+                    fecha BIGINT NOT NULL,
+                    repeticion TEXT NOT NULL,
+                    fecha_creacion BIGINT NOT NULL,
+                    updated_at BIGINT NOT NULL,
+                    PRIMARY KEY (user_id, cloud_key)
+                )
+                """.trimIndent(),
+            )
         }
     }
 
@@ -107,24 +123,28 @@ object SyncRepository {
                     }
                 }
             }
-            val inbox = mutableListOf<SyncInbox>()
+            val recordatorios = mutableListOf<SyncRecordatorio>()
             connection.prepareStatement(
-                "SELECT cloud_key, texto, timestamp, procesado, updated_at FROM user_inbox WHERE user_id = ?",
+                """
+                SELECT cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at
+                FROM user_recordatorios WHERE user_id = ?
+                """.trimIndent(),
             ).use { statement ->
                 statement.setLong(1, userId)
                 statement.executeQuery().use { result ->
                     while (result.next()) {
-                        inbox += SyncInbox(
+                        recordatorios += SyncRecordatorio(
                             cloudKey = result.getString("cloud_key"),
                             texto = result.getString("texto"),
-                            timestamp = result.getLong("timestamp"),
-                            procesado = result.getInt("procesado") == 1,
+                            fecha = result.getLong("fecha"),
+                            repeticion = result.getString("repeticion"),
+                            fechaCreacion = result.getLong("fecha_creacion"),
                             updatedAt = result.getLong("updated_at"),
                         )
                     }
                 }
             }
-            return SyncPayload(contextos = contextos, tareas = tareas, inbox = inbox)
+            return SyncPayload(contextos = contextos, tareas = tareas, recordatorios = recordatorios)
         }
     }
 
@@ -137,7 +157,7 @@ object SyncRepository {
                     it.setLong(1, userId)
                     it.executeUpdate()
                 }
-                connection.prepareStatement("DELETE FROM user_inbox WHERE user_id = ?").use {
+                connection.prepareStatement("DELETE FROM user_recordatorios WHERE user_id = ?").use {
                     it.setLong(1, userId)
                     it.executeUpdate()
                 }
@@ -189,19 +209,21 @@ object SyncRepository {
                         statement.executeUpdate()
                     }
                 }
-                payload.inbox.forEach { item ->
+                payload.recordatorios.forEach { item ->
                     connection.prepareStatement(
                         """
-                        INSERT INTO user_inbox (user_id, cloud_key, texto, timestamp, procesado, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
+                        INSERT INTO user_recordatorios
+                        (user_id, cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """.trimIndent(),
                     ).use { statement ->
                         statement.setLong(1, userId)
                         statement.setString(2, item.cloudKey)
                         statement.setString(3, item.texto)
-                        statement.setLong(4, item.timestamp)
-                        statement.setInt(5, if (item.procesado) 1 else 0)
-                        statement.setLong(6, item.updatedAt)
+                        statement.setLong(4, item.fecha)
+                        statement.setString(5, item.repeticion)
+                        statement.setLong(6, item.fechaCreacion)
+                        statement.setLong(7, item.updatedAt)
                         statement.executeUpdate()
                     }
                 }
@@ -220,7 +242,7 @@ object SyncRepository {
 data class SyncPayload(
     val contextos: List<SyncContexto> = emptyList(),
     val tareas: List<SyncTarea> = emptyList(),
-    val inbox: List<SyncInbox> = emptyList(),
+    val recordatorios: List<SyncRecordatorio> = emptyList(),
 )
 
 @Serializable
@@ -251,10 +273,11 @@ data class SyncTarea(
 )
 
 @Serializable
-data class SyncInbox(
+data class SyncRecordatorio(
     val cloudKey: String,
     val texto: String,
-    val timestamp: Long,
-    val procesado: Boolean = false,
+    val fecha: Long,
+    val repeticion: String = "NINGUNA",
+    val fechaCreacion: Long,
     val updatedAt: Long,
 )

@@ -92,8 +92,8 @@ class NotificationToggleTest {
 
         assertTrue("the toggle must be persisted", sessionStore.notificationsEnabled)
         assertEquals(
-            "both task alarms and both recordatorio alarms must be registered",
-            4,
+            "both task alarms, both recordatorio alarms and the weekly review must be registered",
+            5,
             alarms().size,
         )
     }
@@ -102,7 +102,7 @@ class NotificationToggleTest {
     fun disablingTheToggle_cancelsTheRegisteredAlarms() = runTest {
         seedPendingReminders()
         applyNotificationsEnabled(context, true, db.tareaDao(), db.recordatorioDao())
-        assertEquals("precondition: everything is scheduled", 4, alarms().size)
+        assertEquals("precondition: everything is scheduled", 5, alarms().size)
 
         applyNotificationsEnabled(context, false, db.tareaDao(), db.recordatorioDao())
 
@@ -120,5 +120,40 @@ class NotificationToggleTest {
         applyNotificationsEnabled(context, false, db.tareaDao(), db.recordatorioDao())
 
         assertTrue("the weekly review alarm must be cancelled too", alarms().isEmpty())
+    }
+
+    /**
+     * The DISABLE path cancels the weekly review alarm, so ENABLE must re-arm it:
+     * otherwise an OFF→ON round trip silently drops the weekly review until the
+     * user presses the manual button again.
+     */
+    @Test
+    fun enablingTheToggle_armsTheWeeklyReviewAlarm() = runTest {
+        sessionStore.notificationsEnabled = false
+
+        applyNotificationsEnabled(context, true, db.tareaDao(), db.recordatorioDao())
+
+        assertEquals(
+            "enabling must arm the weekly review alarm even with no pending reminders",
+            1,
+            alarms().size,
+        )
+    }
+
+    @Test
+    fun disablingThenEnablingTheToggle_rearmsTheWeeklyReviewAlarm() = runTest {
+        ReminderScheduler.scheduleWeeklyReview(context)
+        assertEquals("precondition: the weekly review is armed", 1, alarms().size)
+
+        applyNotificationsEnabled(context, false, db.tareaDao(), db.recordatorioDao())
+        assertTrue("disabling must cancel the weekly review alarm", alarms().isEmpty())
+
+        applyNotificationsEnabled(context, true, db.tareaDao(), db.recordatorioDao())
+
+        assertEquals(
+            "OFF→ON must re-arm the weekly review alarm that DISABLE cancelled",
+            1,
+            alarms().size,
+        )
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -97,12 +98,21 @@ fun RecordatoriosScreen(
     }
 }
 
+/**
+ * Top bar whose ENTIRE row is the create touch target, not just the "+ Nuevo"
+ * glyph. The modifier order mirrors the Profile row (`PerfilScreen.kt`):
+ * `clickable` BEFORE `padding`, then a minimum interactive height, so the whole
+ * row — title included — is tappable and its hit area is at least 48dp.
+ */
 @Composable
 private fun RecordatoriosTopBar(onNew: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(20.dp),
+            .clickable { onNew() }
+            .padding(20.dp)
+            .heightIn(min = 48.dp)
+            .semantics { testTag = "recordatorios_new" },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -115,9 +125,6 @@ private fun RecordatoriosTopBar(onNew: () -> Unit) {
         Text(
             text = "+ Nuevo",
             style = DayteskTypography.label.copy(color = DayteskColors.Primary),
-            modifier = Modifier
-                .clickable { onNew() }
-                .semantics { testTag = "recordatorios_new" },
         )
     }
 }

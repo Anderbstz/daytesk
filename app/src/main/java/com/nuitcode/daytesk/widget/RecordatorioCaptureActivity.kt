@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,7 @@ import com.nuitcode.daytesk.theme.DayteskTheme
 import com.nuitcode.daytesk.theme.DayteskTypography
 import com.nuitcode.daytesk.ui.modals.DayteskDatePickerDialog
 import com.nuitcode.daytesk.ui.modals.DayteskTimePickerDialog
+import com.nuitcode.daytesk.ui.recordatorios.SaveGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -129,13 +131,18 @@ private fun RecordatorioCaptureScreen(
     onCancel: () -> Unit,
     onSave: (Recordatorio) -> Unit,
 ) {
-    var texto by remember { mutableStateOf("") }
-    var fecha by remember { mutableStateOf<Long?>(null) }
-    var repeticion by remember { mutableStateOf(Repeticion.NINGUNA) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+    // `rememberSaveable` so a rotation of this dialog-themed Activity keeps the
+    // text, date and repetition the user already entered.
+    var texto by rememberSaveable { mutableStateOf("") }
+    var fecha by rememberSaveable { mutableStateOf<Long?>(null) }
+    var repeticion by rememberSaveable { mutableStateOf(Repeticion.NINGUNA) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var pendingDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     val focusRequester = remember { FocusRequester() }
+    // One instance per mounted screen: a fast double tap on "Guardar" must not
+    // enqueue two inserts (each with its own cloudKey).
+    val saveGuard = remember { SaveGuard() }
 
     val canSave = texto.isNotBlank() && fecha != null
 
@@ -279,7 +286,9 @@ private fun RecordatorioCaptureScreen(
                             .clip(DayteskShapes.pill)
                             .background(if (canSave) DayteskColors.Primary else DayteskColors.PrimaryLight)
                             .clickable(enabled = canSave) {
-                                if (texto.isNotBlank() && fecha != null) onSave(build())
+                                if (texto.isNotBlank() && fecha != null && saveGuard.tryBegin()) {
+                                    onSave(build())
+                                }
                             }
                             .padding(horizontal = DayteskSpacing.xxxl, vertical = DayteskSpacing.md)
                             .semantics { testTag = "capture_recordatorio_save" },

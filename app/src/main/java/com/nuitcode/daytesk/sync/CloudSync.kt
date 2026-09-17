@@ -12,6 +12,7 @@ import com.nuitcode.daytesk.data.local.TareaEntity
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
+import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,7 @@ class CloudSync(
             runSync("pull") { pullOrPushLocked(token) }
         }
         NextTaskWidgetProvider.refresh(context)
+        RecordatorioWidgetProvider.refresh(context)
     }
 
     suspend fun pushNow() {
@@ -45,6 +47,7 @@ class CloudSync(
             runSync("push") { pushLocked(token) }
         }
         NextTaskWidgetProvider.refresh(context)
+        RecordatorioWidgetProvider.refresh(context)
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.nuitcode.daytesk.ui.recordatorios
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,13 +14,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -27,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +39,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Repeticion
@@ -50,7 +55,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Create/edit bottom sheet for a [Recordatorio].
+ * Create/edit full-screen surface for a [Recordatorio], consistent with the
+ * task creation modal. It is rendered as an overlay (not a navigation entry), so
+ * a [BackHandler] dismisses it on system back.
  *
  * The date is mandatory: `fecha` starts `null` for a new reminder, the date row
  * is the only way to set it, and "Guardar" stays disabled until both the text
@@ -65,14 +72,20 @@ fun RecordatorioModal(
     onDelete: ((Recordatorio) -> Unit)? = null,
     initial: Recordatorio? = null,
 ) {
-    var texto by remember(initial?.id) { mutableStateOf(initial?.texto.orEmpty()) }
-    var fecha by remember(initial?.id) { mutableStateOf(initial?.fecha) }
-    var repeticion by remember(initial?.id) {
+    // `rememberSaveable` (not `remember`) so a rotation does not discard what
+    // the user typed: the modal is an overlay, not a navigation entry, so
+    // without saved state a config change closed it and lost the text and date.
+    var texto by rememberSaveable(initial?.id) { mutableStateOf(initial?.texto.orEmpty()) }
+    var fecha by rememberSaveable(initial?.id) { mutableStateOf(initial?.fecha) }
+    var repeticion by rememberSaveable(initial?.id) {
         mutableStateOf(initial?.repeticion ?: Repeticion.NINGUNA)
     }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var pendingDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
+    // One instance per mounted modal: a fast double tap on "Guardar" must not
+    // enqueue two inserts (each with its own cloudKey).
+    val saveGuard = remember { SaveGuard() }
 
     val editing = initial != null
     val canSave = texto.isNotBlank() && fecha != null
@@ -87,48 +100,51 @@ fun RecordatorioModal(
         updatedAt = System.currentTimeMillis(),
     )
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter,
+    // The modal is an overlay, not a navigation entry, so system back must be
+    // intercepted explicitly — without this handler it would exit the app.
+    BackHandler { onDismiss() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(DayteskColors.Background)
+            .systemBarsPadding(),
     ) {
+        // ── Top bar ─────────────────────────────────────
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable { onDismiss() },
-        )
+                .fillMaxWidth()
+                .padding(horizontal = DayteskSpacing.xl, vertical = DayteskSpacing.xl),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Cerrar",
+                tint = DayteskColors.TextDisabled,
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .size(DayteskSpacing.xxl)
+                    .clickable { onDismiss() },
+            )
+            Text(
+                text = if (editing) "Editar recordatorio" else "Nuevo recordatorio",
+                style = DayteskTypography.h1,
+                color = DayteskColors.TextPrimary,
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = DayteskSpacing.xxxxl),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+            )
+        }
 
+        // ── Form ────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .navigationBarsPadding()
-                .clip(DayteskShapes.large)
-                .background(DayteskColors.Surface)
-                .clickable(enabled = false) { }
                 .padding(horizontal = DayteskSpacing.xl)
                 .padding(bottom = DayteskSpacing.xl),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = DayteskSpacing.sm),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(40.dp)
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(DayteskColors.Border),
-                )
-            }
-
-            Text(
-                text = if (editing) "Editar recordatorio" else "Nuevo recordatorio",
-                style = DayteskTypography.h3,
-                color = DayteskColors.TextPrimary,
-                modifier = Modifier.padding(top = DayteskSpacing.md, bottom = DayteskSpacing.md),
-            )
 
             Box(
                 modifier = Modifier
@@ -251,7 +267,9 @@ fun RecordatorioModal(
                     modifier = Modifier
                         .clip(DayteskShapes.pill)
                         .background(if (canSave) DayteskColors.Primary else DayteskColors.PrimaryLight)
-                        .clickable(enabled = canSave) { onSave(build()) }
+                        .clickable(enabled = canSave) {
+                            if (canSave && saveGuard.tryBegin()) onSave(build())
+                        }
                         .padding(horizontal = DayteskSpacing.xxxl, vertical = DayteskSpacing.md)
                         .semantics { testTag = "recordatorio_save" },
                     contentAlignment = Alignment.Center,

@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -75,6 +77,7 @@ import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.sync.CloudSync
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
+import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -123,6 +126,7 @@ fun DayteskApp(
     database: AppDatabase,
     contextoRepository: ContextoRepository =
         DefaultContextoRepository(database.contextoDao()),
+    initialTab: NavKey = Inicio,
     onLogout: () -> Unit = {},
 ) {
     val tareaDao = database.tareaDao()
@@ -136,8 +140,11 @@ fun DayteskApp(
     var editingTarea by remember { mutableStateOf<Tarea?>(null) }
     var showRevisionSemanal by remember { mutableStateOf(false) }
     var detalleTareaSeleccionada by remember { mutableStateOf<Tarea?>(null) }
-    var showRecordatorioModal by remember { mutableStateOf(false) }
-    var recordatorioEditando by remember { mutableStateOf<Recordatorio?>(null) }
+    // Saved so a rotation keeps the create/edit surface open. The edit target is
+    // held by id (a domain object is not saveable) and resolved from the loaded
+    // data, preserving the text the user already typed.
+    var showRecordatorioModal by rememberSaveable { mutableStateOf(false) }
+    var recordatorioEditandoId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddContexto by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -173,6 +180,7 @@ fun DayteskApp(
                 rollExpiredRecordatorios(context, database)
                 ReminderScheduler.rescheduleRecordatorios(context, state.data.recordatorios)
                 NextTaskWidgetProvider.refresh(context)
+                RecordatorioWidgetProvider.refresh(context)
                 CloudSync.schedulePush(scope, cloudSync)
             }
             DayteskNavScaffold(
@@ -180,17 +188,18 @@ fun DayteskApp(
                 contextoRepository = contextoRepository,
                 tareaDao = tareaDao,
                 recordatorioDao = recordatorioDao,
+                initialTab = initialTab,
                 onShowNuevaTarea = {
                     editingTarea = null
                     showNuevaTarea = true
                 },
                 onShowDetalleTarea = { tarea -> detalleTareaSeleccionada = tarea },
                 onNewRecordatorio = {
-                    recordatorioEditando = null
+                    recordatorioEditandoId = null
                     showRecordatorioModal = true
                 },
                 onEditRecordatorio = { recordatorio ->
-                    recordatorioEditando = recordatorio
+                    recordatorioEditandoId = recordatorio.id
                     showRecordatorioModal = true
                 },
                 onShowRevisionSemanal = { showRevisionSemanal = true },
@@ -268,25 +277,31 @@ fun DayteskApp(
     }
 
     // ── Modal: Nuevo/Editar Recordatorio ──────────────────────
-    if (showRecordatorioModal) {
+    // Resolved by id so the edit target survives rotation. An edit waits for the
+    // first data emission before composing: composing it earlier would key the
+    // modal on `null` and later reset the restored input when the target
+    // arrives, which is exactly the loss this restore is meant to prevent.
+    val recordatorioEditando =
+        cachedData?.recordatorios?.firstOrNull { it.id == recordatorioEditandoId }
+    if (showRecordatorioModal && (recordatorioEditandoId == null || recordatorioEditando != null)) {
         RecordatorioModal(
             initial = recordatorioEditando,
             onDismiss = {
                 showRecordatorioModal = false
-                recordatorioEditando = null
+                recordatorioEditandoId = null
             },
             onSave = { recordatorio ->
                 scope.launch {
                     persistRecordatorio(context, recordatorioDao, recordatorio)
                     showRecordatorioModal = false
-                    recordatorioEditando = null
+                    recordatorioEditandoId = null
                 }
             },
             onDelete = { recordatorio ->
                 scope.launch {
                     deleteRecordatorio(context, recordatorioDao, recordatorio)
                     showRecordatorioModal = false
-                    recordatorioEditando = null
+                    recordatorioEditandoId = null
                 }
             },
         )
@@ -418,14 +433,17 @@ private fun DayteskNavScaffold(
     onNewRecordatorio: () -> Unit,
     onEditRecordatorio: (Recordatorio) -> Unit,
     onShowRevisionSemanal: () -> Unit,
+    initialTab: NavKey = Inicio,
     onLogout: () -> Unit = {},
 ) {
-    val backStack = rememberNavBackStack(Inicio)
+    val backStack = rememberNavBackStack(initialTab)
     val currentEntry = backStack.lastOrNull()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val pluginStore = remember { com.nuitcode.daytesk.data.HomePluginStore(context) }
     var homePlugins by remember { mutableStateOf(pluginStore.load()) }
+    // Anchors the Inicio FAB dropdown; only the Inicio branch ever opens it.
+    var menu by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = Modifier,
@@ -439,15 +457,50 @@ private fun DayteskNavScaffold(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onShowNuevaTarea,
-                containerColor = DayteskColors.Primary,
-                contentColor = Color.White,
-                shape = CircleShape,
-                modifier = Modifier.size(56.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
+            when (currentEntry) {
+                is Recordatorios -> Fab(
+                    onClick = onNewRecordatorio,
+                    icon = Icons.Default.Notifications,
+                    contentDescription = "Nuevo recordatorio",
+                )
+                is Inicio -> Box {
+                    FloatingActionButton(
+                        onClick = { menu = true },
+                        containerColor = DayteskColors.Primary,
+                        contentColor = Color.White,
+                        shape = CircleShape,
+                        modifier = Modifier.size(56.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Agregar",
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = menu,
+                        onDismissRequest = { menu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Nueva tarea") },
+                            onClick = {
+                                menu = false
+                                onShowNuevaTarea()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Nuevo recordatorio") },
+                            onClick = {
+                                menu = false
+                                onNewRecordatorio()
+                            },
+                        )
+                    }
+                }
+                // Tareas and every other route (Perfil, Utilidades, sub-routes)
+                // keep the original task-creation behavior.
+                else -> Fab(
+                    onClick = onShowNuevaTarea,
+                    icon = Icons.Default.Add,
                     contentDescription = "Agregar tarea",
                 )
             }
@@ -607,6 +660,26 @@ entry<Utilidades> {
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+
+@Composable
+private fun Fab(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+) {
+    FloatingActionButton(
+        onClick = onClick,
+        containerColor = DayteskColors.Primary,
+        contentColor = Color.White,
+        shape = CircleShape,
+        modifier = Modifier.size(56.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+        )
+    }
+}
 
 @Composable
 private fun DeferredUtilityScreen(title: String) {

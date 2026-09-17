@@ -6,6 +6,7 @@ import android.content.Intent
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.toDomain
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
+import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -32,7 +33,10 @@ class BootReceiver : BroadcastReceiver() {
                     .map { it.toDomain() }
                 ReminderScheduler.rescheduleRecordatorios(context, recordatorios)
                 NextTaskWidgetProvider.refresh(context)
-                NextTaskWidgetProvider.refresh(context)
+                // Awaited: the recordatorio render must finish before the
+                // goAsync slot is released, or a kill right after finish()
+                // would drop it and leave the widget stale until the next tick.
+                RecordatorioWidgetProvider.refreshNow(context)
             } finally {
                 pending.finish()
             }

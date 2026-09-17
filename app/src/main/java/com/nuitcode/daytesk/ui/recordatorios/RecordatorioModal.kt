@@ -79,6 +79,9 @@ fun RecordatorioModal(
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
     var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+    // One instance per mounted modal: a fast double tap on "Guardar" must not
+    // enqueue two inserts (each with its own cloudKey).
+    val saveGuard = remember { SaveGuard() }
 
     val editing = initial != null
     val canSave = texto.isNotBlank() && fecha != null
@@ -260,7 +263,9 @@ fun RecordatorioModal(
                     modifier = Modifier
                         .clip(DayteskShapes.pill)
                         .background(if (canSave) DayteskColors.Primary else DayteskColors.PrimaryLight)
-                        .clickable(enabled = canSave) { onSave(build()) }
+                        .clickable(enabled = canSave) {
+                            if (canSave && saveGuard.tryBegin()) onSave(build())
+                        }
                         .padding(horizontal = DayteskSpacing.xxxl, vertical = DayteskSpacing.md)
                         .semantics { testTag = "recordatorio_save" },
                     contentAlignment = Alignment.Center,

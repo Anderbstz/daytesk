@@ -59,6 +59,7 @@ import com.nuitcode.daytesk.theme.DayteskTheme
 import com.nuitcode.daytesk.theme.DayteskTypography
 import com.nuitcode.daytesk.ui.modals.DayteskDatePickerDialog
 import com.nuitcode.daytesk.ui.modals.DayteskTimePickerDialog
+import com.nuitcode.daytesk.ui.recordatorios.SaveGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -136,6 +137,9 @@ private fun RecordatorioCaptureScreen(
     var showTimePicker by remember { mutableStateOf(false) }
     var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
     val focusRequester = remember { FocusRequester() }
+    // One instance per mounted screen: a fast double tap on "Guardar" must not
+    // enqueue two inserts (each with its own cloudKey).
+    val saveGuard = remember { SaveGuard() }
 
     val canSave = texto.isNotBlank() && fecha != null
 
@@ -279,7 +283,9 @@ private fun RecordatorioCaptureScreen(
                             .clip(DayteskShapes.pill)
                             .background(if (canSave) DayteskColors.Primary else DayteskColors.PrimaryLight)
                             .clickable(enabled = canSave) {
-                                if (texto.isNotBlank() && fecha != null) onSave(build())
+                                if (texto.isNotBlank() && fecha != null && saveGuard.tryBegin()) {
+                                    onSave(build())
+                                }
                             }
                             .padding(horizontal = DayteskSpacing.xxxl, vertical = DayteskSpacing.md)
                             .semantics { testTag = "capture_recordatorio_save" },

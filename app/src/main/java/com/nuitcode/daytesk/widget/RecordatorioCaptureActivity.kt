@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -130,12 +131,14 @@ private fun RecordatorioCaptureScreen(
     onCancel: () -> Unit,
     onSave: (Recordatorio) -> Unit,
 ) {
-    var texto by remember { mutableStateOf("") }
-    var fecha by remember { mutableStateOf<Long?>(null) }
-    var repeticion by remember { mutableStateOf(Repeticion.NINGUNA) }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+    // `rememberSaveable` so a rotation of this dialog-themed Activity keeps the
+    // text, date and repetition the user already entered.
+    var texto by rememberSaveable { mutableStateOf("") }
+    var fecha by rememberSaveable { mutableStateOf<Long?>(null) }
+    var repeticion by rememberSaveable { mutableStateOf(Repeticion.NINGUNA) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var pendingDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     val focusRequester = remember { FocusRequester() }
     // One instance per mounted screen: a fast double tap on "Guardar" must not
     // enqueue two inserts (each with its own cloudKey).

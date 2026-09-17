@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,14 +72,17 @@ fun RecordatorioModal(
     onDelete: ((Recordatorio) -> Unit)? = null,
     initial: Recordatorio? = null,
 ) {
-    var texto by remember(initial?.id) { mutableStateOf(initial?.texto.orEmpty()) }
-    var fecha by remember(initial?.id) { mutableStateOf(initial?.fecha) }
-    var repeticion by remember(initial?.id) {
+    // `rememberSaveable` (not `remember`) so a rotation does not discard what
+    // the user typed: the modal is an overlay, not a navigation entry, so
+    // without saved state a config change closed it and lost the text and date.
+    var texto by rememberSaveable(initial?.id) { mutableStateOf(initial?.texto.orEmpty()) }
+    var fecha by rememberSaveable(initial?.id) { mutableStateOf(initial?.fecha) }
+    var repeticion by rememberSaveable(initial?.id) {
         mutableStateOf(initial?.repeticion ?: Repeticion.NINGUNA)
     }
-    var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    var pendingDateMillis by remember { mutableStateOf<Long?>(null) }
+    var showDatePicker by rememberSaveable { mutableStateOf(false) }
+    var showTimePicker by rememberSaveable { mutableStateOf(false) }
+    var pendingDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
     // One instance per mounted modal: a fast double tap on "Guardar" must not
     // enqueue two inserts (each with its own cloudKey).
     val saveGuard = remember { SaveGuard() }

@@ -140,8 +140,11 @@ fun DayteskApp(
     var editingTarea by remember { mutableStateOf<Tarea?>(null) }
     var showRevisionSemanal by remember { mutableStateOf(false) }
     var detalleTareaSeleccionada by remember { mutableStateOf<Tarea?>(null) }
-    var showRecordatorioModal by remember { mutableStateOf(false) }
-    var recordatorioEditando by remember { mutableStateOf<Recordatorio?>(null) }
+    // Saved so a rotation keeps the create/edit surface open. The edit target is
+    // held by id (a domain object is not saveable) and resolved from the loaded
+    // data, preserving the text the user already typed.
+    var showRecordatorioModal by rememberSaveable { mutableStateOf(false) }
+    var recordatorioEditandoId by rememberSaveable { mutableStateOf<Long?>(null) }
     var showAddContexto by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -192,11 +195,11 @@ fun DayteskApp(
                 },
                 onShowDetalleTarea = { tarea -> detalleTareaSeleccionada = tarea },
                 onNewRecordatorio = {
-                    recordatorioEditando = null
+                    recordatorioEditandoId = null
                     showRecordatorioModal = true
                 },
                 onEditRecordatorio = { recordatorio ->
-                    recordatorioEditando = recordatorio
+                    recordatorioEditandoId = recordatorio.id
                     showRecordatorioModal = true
                 },
                 onShowRevisionSemanal = { showRevisionSemanal = true },
@@ -274,25 +277,31 @@ fun DayteskApp(
     }
 
     // ── Modal: Nuevo/Editar Recordatorio ──────────────────────
-    if (showRecordatorioModal) {
+    // Resolved by id so the edit target survives rotation. An edit waits for the
+    // first data emission before composing: composing it earlier would key the
+    // modal on `null` and later reset the restored input when the target
+    // arrives, which is exactly the loss this restore is meant to prevent.
+    val recordatorioEditando =
+        cachedData?.recordatorios?.firstOrNull { it.id == recordatorioEditandoId }
+    if (showRecordatorioModal && (recordatorioEditandoId == null || recordatorioEditando != null)) {
         RecordatorioModal(
             initial = recordatorioEditando,
             onDismiss = {
                 showRecordatorioModal = false
-                recordatorioEditando = null
+                recordatorioEditandoId = null
             },
             onSave = { recordatorio ->
                 scope.launch {
                     persistRecordatorio(context, recordatorioDao, recordatorio)
                     showRecordatorioModal = false
-                    recordatorioEditando = null
+                    recordatorioEditandoId = null
                 }
             },
             onDelete = { recordatorio ->
                 scope.launch {
                     deleteRecordatorio(context, recordatorioDao, recordatorio)
                     showRecordatorioModal = false
-                    recordatorioEditando = null
+                    recordatorioEditandoId = null
                 }
             },
         )

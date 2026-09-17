@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -62,12 +63,16 @@ class RecordatorioActionsTest {
         db.close()
     }
 
-    private suspend fun insertExpired(repeticion: Repeticion, fecha: Long = past): Long = dao.insert(
+    private suspend fun insertExpired(
+        repeticion: Repeticion,
+        fecha: Long = past,
+        cloudKey: String = "old-cloud-key",
+    ): Long = dao.insert(
         RecordatorioEntity(
             texto = "expired",
             fecha = fecha,
             repeticion = repeticion.name,
-            cloudKey = "old-cloud-key",
+            cloudKey = cloudKey,
             updatedAt = 1L,
             fechaCreacion = 1L,
         ),
@@ -80,7 +85,7 @@ class RecordatorioActionsTest {
     fun dailyExpiry_rollsTheNextOccurrenceOneDayLater() = runTest {
         val originalId = insertExpired(Repeticion.DIARIA)
 
-        rollExpiredRecordatorios(context, dao, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
 
         val next = dao.getAllOnce().single()
         assertEquals(Repeticion.DIARIA.nextDue(past), next.fecha)
@@ -93,7 +98,7 @@ class RecordatorioActionsTest {
     fun weeklyExpiry_rollsTheNextOccurrenceOneWeekLater() = runTest {
         insertExpired(Repeticion.SEMANAL)
 
-        rollExpiredRecordatorios(context, dao, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
 
         assertEquals(Repeticion.SEMANAL.nextDue(past), dao.getAllOnce().single().fecha)
     }
@@ -102,7 +107,7 @@ class RecordatorioActionsTest {
     fun monthlyExpiry_rollsTheNextOccurrenceOneMonthLater() = runTest {
         insertExpired(Repeticion.MENSUAL)
 
-        rollExpiredRecordatorios(context, dao, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
 
         assertEquals(Repeticion.MENSUAL.nextDue(past), dao.getAllOnce().single().fecha)
     }
@@ -114,7 +119,7 @@ class RecordatorioActionsTest {
         val now = System.currentTimeMillis()
         insertExpired(Repeticion.DIARIA, fecha = now - hour)
 
-        rollExpiredRecordatorios(context, dao, now = now)
+        rollExpiredRecordatorios(context, db, now = now)
 
         val next = dao.getAllOnce().single()
         assertNotEquals("a new occurrence needs its own sync identity", "old-cloud-key", next.cloudKey)
@@ -132,17 +137,98 @@ class RecordatorioActionsTest {
     fun noRepetition_doesNotRecur() = runTest {
         insertExpired(Repeticion.NINGUNA)
 
-        rollExpiredRecordatorios(context, dao, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
 
         assertTrue("NINGUNA must not create a next row", dao.getAllOnce().isEmpty())
         assertTrue("no alarm must survive a non-recurring expiry", scheduledAlarms().isEmpty())
+    }
+
+    /**
+     * RELI-003: a dormant daily reminder must not roll to a past date, which
+     * would leave the series stalled (the scheduler only registers future
+     * alarms).
+     */
+    @Test
+    fun dormantDailyRecordatorio_rollsToTheFirstFutureOccurrence() = runTest {
+        // Real clock: the alarm scheduler compares against it internally, so a
+        // synthetic `now` in the past would make every rolled date unschedulable.
+        val now = System.currentTimeMillis()
+        // Ten days dormant: a single `nextDue` step would still be in the past.
+        insertExpired(Repeticion.DIARIA, fecha = now - 10 * 24 * hour)
+
+        rollExpiredRecordatorios(context, db, now = now)
+
+        val next = dao.getAllOnce().single()
+        assertTrue(
+            "a rolled occurrence must always be in the future, got ${next.fecha} <= $now",
+            next.fecha > now,
+        )
+        assertEquals(
+            "advancing must preserve the repetition cadence",
+            Repeticion.DIARIA,
+            Repeticion.valueOf(next.repeticion),
+        )
+        assertEquals(
+            "the future occurrence must be scheduled",
+            2,
+            scheduledAlarms().size,
+        )
+    }
+
+    /** RESIL-001: two sweeps for the same expired row must not duplicate it. */
+    @Test
+    fun rollingTheSameExpiredRowTwice_yieldsExactlyOneNextOccurrence() = runTest {
+        insertExpired(Repeticion.DIARIA)
+
+        rollExpiredRecordatorios(context, db, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
+
+        assertEquals(
+            "the second sweep must not create a duplicate occurrence",
+            1,
+            dao.getAllOnce().size,
+        )
+    }
+
+    /**
+     * RESIL-001: the roll is a transaction. If an insertion fails midway, no
+     * row may be left deleted or half-advanced.
+     */
+    @Test
+    fun roll_isAtomic_aFailureMidwayRollsBackEveryRow() = runTest {
+        val firstId = insertExpired(Repeticion.DIARIA, fecha = past, cloudKey = "old-1")
+        val secondId = insertExpired(Repeticion.DIARIA, fecha = past + 1, cloudKey = "old-2")
+        var generated = 0
+        val failure = IllegalStateException("boom")
+
+        val thrown = try {
+            rollExpiredRecordatorios(context, db, now = past + 1_000) {
+                generated += 1
+                if (generated == 2) throw failure
+                "new-$generated"
+            }
+            null
+        } catch (e: IllegalStateException) {
+            e
+        }
+
+        assertNotNull("the failure must propagate to the caller", thrown)
+        assertEquals("the propagated failure must keep its message", "boom", thrown?.message)
+        assertEquals("the whole roll must roll back", 2, dao.getAllOnce().size)
+        assertEquals(
+            "both originals must survive the rollback",
+            setOf("old-1", "old-2"),
+            dao.getAllOnce().map { it.cloudKey }.toSet(),
+        )
+        assertNotNull(dao.getById(firstId))
+        assertNotNull(dao.getById(secondId))
     }
 
     @Test
     fun roll_deletesTheExpiredOriginal() = runTest {
         val originalId = insertExpired(Repeticion.DIARIA)
 
-        rollExpiredRecordatorios(context, dao, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
 
         assertNull("the expired row must be deleted, not kept", dao.getById(originalId))
         assertEquals("only the next occurrence must remain", 1, dao.getAllOnce().size)
@@ -161,7 +247,7 @@ class RecordatorioActionsTest {
             ),
         )
 
-        rollExpiredRecordatorios(context, dao, now = past + 1)
+        rollExpiredRecordatorios(context, db, now = past + 1)
 
         val stored = dao.getById(futureId)
         assertEquals("a future reminder must not be rolled early", "keep-me", stored?.cloudKey)

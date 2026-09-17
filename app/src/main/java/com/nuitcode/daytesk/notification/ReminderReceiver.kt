@@ -59,10 +59,11 @@ class ReminderReceiver : BroadcastReceiver() {
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val dao = AppDatabase.getInstance(context).recordatorioDao()
+                val database = AppDatabase.getInstance(context)
+                val dao = database.recordatorioDao()
                 val recordatorio = dao.getById(recordatorioId) ?: return@launch
                 if (!early) {
-                    rollExpiredRecordatorios(context, dao, System.currentTimeMillis())
+                    rollExpiredRecordatorios(context, database, System.currentTimeMillis())
                 }
                 if (NotificationPreferences.isEnabled(context)) {
                     NotificationHelper.showRecordatorio(

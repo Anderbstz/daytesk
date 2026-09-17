@@ -1,6 +1,8 @@
 package com.nuitcode.daytesk.data
 
 import android.content.Context
+import androidx.room.withTransaction
+import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.RecordatorioDao
 import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.toEntity
@@ -45,44 +47,88 @@ suspend fun deleteRecordatorio(
     dao.delete(recordatorio.toEntity())
 }
 
+/** A row inserted by [rollExpiredRecordatorios], paired with its new id. */
+private data class RolledOccurrence(val id: Long, val entity: RecordatorioEntity)
+
 /**
  * Rolls every expired recordatorio forward.
  *
  * For each row whose `fecha` is not in the future:
- *   - if `repeticion != NINGUNA`, the next occurrence is inserted with
- *     `fecha = Repeticion.nextDue(previousFecha)`, a fresh `cloudKey` and
- *     `fechaCreacion = updatedAt = now`, and its notifications are scheduled;
+ *   - if `repeticion != NINGUNA`, the next occurrence is inserted with a fresh
+ *     `cloudKey` and `fechaCreacion = updatedAt = now`, and its notifications
+ *     are scheduled;
  *   - the expired original is deleted and its notifications cancelled.
  *
- * `Repeticion.nextDue()` is reused unchanged, exactly like
- * [archiveExpiredTasks] does for recurring tasks. Because the expired row is
- * deleted in the same pass, running this twice (in-app sweep plus the
- * at-due alarm receiver) is idempotent: the second pass finds nothing.
+ * ## Atomicity and idempotency
+ *
+ * The read-modify-write runs inside [AppDatabase.withTransaction]. The in-app
+ * sweep (`Navigation.kt`) and the at-due receiver (`ReminderReceiver`) can run
+ * concurrently; without a transaction both would read the same expired row and
+ * insert a next occurrence, producing a duplicate series. Because the read now
+ * happens inside the transaction, the second writer observes the committed
+ * state and finds nothing left to roll — a second pass is a no-op.
+ *
+ * ## Future advancement
+ *
+ * `Repeticion.nextDue(previousFecha)` can still land on or before `now` for a
+ * long-dormant recordatorio. Inserting that past date would stall the series,
+ * because [ReminderScheduler.scheduleRecordatorio] only registers alarms in the
+ * future. The roll therefore keeps advancing until the next occurrence is
+ * strictly in the future. `Repeticion.nextDue()` itself is left untouched.
+ *
+ * ## Side-effect ordering
+ *
+ * Notifications and alarm changes run only after the transaction commits, so a
+ * rollback can never leave an alarm scheduled for a row that survived.
+ *
+ * @param nextCloudKey identity generator for the rolled occurrence. Injectable
+ *   so tests can make the roll deterministic (and prove the transaction rolls
+ *   back when an insertion fails midway).
  */
 suspend fun rollExpiredRecordatorios(
     context: Context,
-    dao: RecordatorioDao,
+    database: AppDatabase,
     now: Long = System.currentTimeMillis(),
+    nextCloudKey: () -> String = { UUID.randomUUID().toString() },
 ) {
-    dao.getAllOnce().forEach { entity ->
-        if (entity.fecha > now) return@forEach
-        val repeticion = runCatching { Repeticion.valueOf(entity.repeticion) }
-            .getOrDefault(Repeticion.NINGUNA)
-        if (repeticion != Repeticion.NINGUNA) {
-            val nextFecha = repeticion.nextDue(entity.fecha)
-            val next = RecordatorioEntity(
-                id = 0,
-                texto = entity.texto,
-                fecha = nextFecha,
-                repeticion = entity.repeticion,
-                cloudKey = UUID.randomUUID().toString(),
-                updatedAt = now,
-                fechaCreacion = now,
-            )
-            val nextId = dao.insert(next)
-            ReminderScheduler.scheduleRecordatorio(context, nextId, next.texto, nextFecha)
+    val dao = database.recordatorioDao()
+    val rolled = mutableListOf<RolledOccurrence>()
+    val expiredIds = mutableListOf<Long>()
+
+    database.withTransaction {
+        dao.getAllOnce().forEach { entity ->
+            if (entity.fecha > now) return@forEach
+            expiredIds += entity.id
+            val repeticion = runCatching { Repeticion.valueOf(entity.repeticion) }
+                .getOrDefault(Repeticion.NINGUNA)
+            if (repeticion != Repeticion.NINGUNA) {
+                var nextFecha = repeticion.nextDue(entity.fecha)
+                while (nextFecha <= now) {
+                    nextFecha = repeticion.nextDue(nextFecha)
+                }
+                val next = RecordatorioEntity(
+                    id = 0,
+                    texto = entity.texto,
+                    fecha = nextFecha,
+                    repeticion = entity.repeticion,
+                    cloudKey = nextCloudKey(),
+                    updatedAt = now,
+                    fechaCreacion = now,
+                )
+                rolled += RolledOccurrence(dao.insert(next), next)
+            }
+            dao.delete(entity)
         }
-        dao.delete(entity)
-        ReminderScheduler.cancelRecordatorio(context, entity.id)
     }
+
+    // Post-commit side effects: the database is authoritative by now.
+    rolled.forEach { occurrence ->
+        ReminderScheduler.scheduleRecordatorio(
+            context,
+            occurrence.id,
+            occurrence.entity.texto,
+            occurrence.entity.fecha,
+        )
+    }
+    expiredIds.forEach { ReminderScheduler.cancelRecordatorio(context, it) }
 }

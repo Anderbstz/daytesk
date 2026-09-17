@@ -169,7 +169,7 @@ fun DayteskApp(
                 )
                 // Roll recurring reminders forward, then re-register every
                 // alarm (both are idempotent with the receiver's own roll).
-                rollExpiredRecordatorios(context, recordatorioDao)
+                rollExpiredRecordatorios(context, database)
                 ReminderScheduler.rescheduleRecordatorios(context, state.data.recordatorios)
                 NextTaskWidgetProvider.refresh(context)
                 CloudSync.schedulePush(scope, cloudSync)

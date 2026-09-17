@@ -40,6 +40,12 @@ import com.nuitcode.daytesk.utilities.common.PermissionRationale
 fun ConfiguracionScreen(
     onBack: () -> Unit,
     onOpenWeeklyReview: () -> Unit,
+    /**
+     * Applies the toggle. The host owns the side effects (persist + reschedule
+     * or cancel alarms) because they need the DAOs and a coroutine scope; the
+     * default no-op keeps the read-only test entry point working.
+     */
+    onNotificationsChanged: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val sessionStore = remember { SessionStore(context) }
@@ -49,7 +55,7 @@ fun ConfiguracionScreen(
 
     fun setNotificationsEnabled(enabled: Boolean) {
         notificationsOn = enabled
-        sessionStore.notificationsEnabled = enabled
+        onNotificationsChanged(enabled)
     }
 
     Column(

@@ -23,6 +23,10 @@ class ReminderReceiver : BroadcastReceiver() {
         val taskId = intent.getLongExtra(ReminderScheduler.EXTRA_TASK_ID, -1L)
         val title = intent.getStringExtra(ReminderScheduler.EXTRA_TITLE) ?: return
         val early = intent.getBooleanExtra(ReminderScheduler.EXTRA_EARLY, false)
+        // The toggle governs the show path, not only the schedule path: an alarm
+        // that fires while notifications are off (because it could not be
+        // cancelled, or was registered before the toggle changed) stays silent.
+        if (!NotificationPreferences.isEnabled(context)) return
         if (taskId == ReminderScheduler.WEEKLY_REVIEW_ID) {
             NotificationHelper.showTaskReminder(context, title, taskId)
             ReminderScheduler.scheduleWeeklyReview(context)

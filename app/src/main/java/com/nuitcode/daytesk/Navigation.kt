@@ -85,6 +85,7 @@ import com.nuitcode.daytesk.ui.inicio.InicioScreen
 import com.nuitcode.daytesk.ui.main.DayteskUiState
 import com.nuitcode.daytesk.ui.main.MainScreenViewModel
 import com.nuitcode.daytesk.notification.ReminderScheduler
+import com.nuitcode.daytesk.notification.applyNotificationsEnabled
 import com.nuitcode.daytesk.ui.historial.HistorialScreen
 import com.nuitcode.daytesk.ui.modals.DetalleTareaModal
 import com.nuitcode.daytesk.ui.modals.NuevaTareaModal
@@ -559,6 +560,22 @@ entry<Utilidades> {
                     ConfiguracionScreen(
                         onBack = { backStack.removeLastOrNull() },
                         onOpenWeeklyReview = onShowRevisionSemanal,
+                        onNotificationsChanged = { enabled ->
+                            scope.launch {
+                                val tareas = tareaDao
+                                val recordatorios = recordatorioDao
+                                if (tareas != null && recordatorios != null) {
+                                    applyNotificationsEnabled(
+                                        context,
+                                        enabled,
+                                        tareas,
+                                        recordatorios,
+                                    )
+                                } else {
+                                    SessionStore(context).notificationsEnabled = enabled
+                                }
+                            }
+                        },
                     )
                 }
                 entry<Ayuda> {

@@ -3,10 +3,10 @@
     android:description="@string/widget_recordatorio_description"
     android:initialLayout="@layout/widget_recordatorio"
     android:minWidth="110dp"
-    android:minHeight="110dp"
+    android:minHeight="40dp"
     android:previewLayout="@layout/widget_recordatorio"
     android:resizeMode="none"
     android:targetCellWidth="2"
-    android:targetCellHeight="2"
+    android:targetCellHeight="1"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

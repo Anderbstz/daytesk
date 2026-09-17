@@ -11,6 +11,7 @@ import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.notification.NotificationHelper
 import com.nuitcode.daytesk.notification.NotificationPreferences
 import com.nuitcode.daytesk.notification.ReminderScheduler
+import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import java.util.UUID
 
 /**
@@ -36,6 +37,7 @@ suspend fun persistRecordatorio(
         recordatorio.id
     }
     ReminderScheduler.scheduleRecordatorio(context, id, recordatorio.texto, recordatorio.fecha)
+    RecordatorioWidgetProvider.refresh(context)
     return id
 }
 
@@ -47,6 +49,7 @@ suspend fun deleteRecordatorio(
 ) {
     ReminderScheduler.cancelRecordatorio(context, recordatorio.id)
     dao.delete(recordatorio.toEntity())
+    RecordatorioWidgetProvider.refresh(context)
 }
 
 /** A row inserted by [rollExpiredRecordatorios], paired with its new id. */
@@ -167,4 +170,5 @@ suspend fun rollExpiredRecordatorios(
         )
     }
     expired.forEach { ReminderScheduler.cancelRecordatorio(context, it.id) }
+    RecordatorioWidgetProvider.refresh(context)
 }

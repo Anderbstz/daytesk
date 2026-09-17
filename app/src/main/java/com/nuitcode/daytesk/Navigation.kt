@@ -77,6 +77,7 @@ import com.nuitcode.daytesk.model.TareaEstado
 import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.sync.CloudSync
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
+import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
@@ -125,6 +126,7 @@ fun DayteskApp(
     database: AppDatabase,
     contextoRepository: ContextoRepository =
         DefaultContextoRepository(database.contextoDao()),
+    initialTab: NavKey = Inicio,
     onLogout: () -> Unit = {},
 ) {
     val tareaDao = database.tareaDao()
@@ -175,6 +177,7 @@ fun DayteskApp(
                 rollExpiredRecordatorios(context, database)
                 ReminderScheduler.rescheduleRecordatorios(context, state.data.recordatorios)
                 NextTaskWidgetProvider.refresh(context)
+                RecordatorioWidgetProvider.refresh(context)
                 CloudSync.schedulePush(scope, cloudSync)
             }
             DayteskNavScaffold(
@@ -182,6 +185,7 @@ fun DayteskApp(
                 contextoRepository = contextoRepository,
                 tareaDao = tareaDao,
                 recordatorioDao = recordatorioDao,
+                initialTab = initialTab,
                 onShowNuevaTarea = {
                     editingTarea = null
                     showNuevaTarea = true
@@ -420,9 +424,10 @@ private fun DayteskNavScaffold(
     onNewRecordatorio: () -> Unit,
     onEditRecordatorio: (Recordatorio) -> Unit,
     onShowRevisionSemanal: () -> Unit,
+    initialTab: NavKey = Inicio,
     onLogout: () -> Unit = {},
 ) {
-    val backStack = rememberNavBackStack(Inicio)
+    val backStack = rememberNavBackStack(initialTab)
     val currentEntry = backStack.lastOrNull()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current

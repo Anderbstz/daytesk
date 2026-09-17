@@ -6,6 +6,7 @@ import android.content.Intent
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.toDomain
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
+import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -32,7 +33,7 @@ class BootReceiver : BroadcastReceiver() {
                     .map { it.toDomain() }
                 ReminderScheduler.rescheduleRecordatorios(context, recordatorios)
                 NextTaskWidgetProvider.refresh(context)
-                NextTaskWidgetProvider.refresh(context)
+                RecordatorioWidgetProvider.refresh(context)
             } finally {
                 pending.finish()
             }

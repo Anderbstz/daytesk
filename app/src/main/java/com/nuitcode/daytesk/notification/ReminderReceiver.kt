@@ -46,11 +46,19 @@ class ReminderReceiver : BroadcastReceiver() {
     /**
      * Recordatorio alarm.
      *
-     * On the at-due alarm the series is rolled, so a recurring reminder keeps
-     * advancing even when the app is never opened. This is idempotent with the
-     * in-app sweep: whichever path runs first deletes the expired row, the
-     * other finds nothing to roll. The toggle is re-checked before showing, so
-     * a reminder disabled after it was scheduled stays silent.
+     * **1h-before (`early = true`)**: notify and leave the row alone so the
+     * at-due alarm still fires.
+     *
+     * **At-due (`early = false`)**: rolling the series is what notifies — the
+     * roll surfaces every just-due occurrence before removing it. This makes
+     * the in-app sweep and this alarm interchangeable: whichever runs first
+     * notifies the user, the other finds nothing to roll. A due reminder can
+     * never be deleted without a notification being requested (RESIL-005). If
+     * the alarm fires a few milliseconds before `fecha`, the row survives the
+     * roll and is notified directly here.
+     *
+     * Both paths are gated by the notifications toggle, so a disabled toggle
+     * governs showing as well as scheduling.
      */
     private fun onRecordatorioAlarm(context: Context, intent: Intent, recordatorioId: Long) {
         val early = intent.getBooleanExtra(ReminderScheduler.EXTRA_EARLY, false)
@@ -62,15 +70,24 @@ class ReminderReceiver : BroadcastReceiver() {
                 val database = AppDatabase.getInstance(context)
                 val dao = database.recordatorioDao()
                 val recordatorio = dao.getById(recordatorioId) ?: return@launch
-                if (!early) {
-                    rollExpiredRecordatorios(context, database, System.currentTimeMillis())
+                if (early) {
+                    if (NotificationPreferences.isEnabled(context)) {
+                        NotificationHelper.showRecordatorio(
+                            context,
+                            title.ifBlank { recordatorio.texto },
+                            recordatorioId,
+                            early = true,
+                        )
+                    }
+                    return@launch
                 }
-                if (NotificationPreferences.isEnabled(context)) {
+                rollExpiredRecordatorios(context, database)
+                if (dao.getById(recordatorioId) != null && NotificationPreferences.isEnabled(context)) {
                     NotificationHelper.showRecordatorio(
                         context,
                         title.ifBlank { recordatorio.texto },
                         recordatorioId,
-                        early,
+                        early = false,
                     )
                 }
             } finally {

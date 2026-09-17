@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.RecordatorioDao
 import com.nuitcode.daytesk.data.local.RecordatorioEntity
@@ -14,6 +15,7 @@ import com.nuitcode.daytesk.model.Repeticion
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -144,6 +146,88 @@ class RecordatorioActionsTest {
     }
 
     /**
+     * RESIL-005: the sweep used to delete the row and cancel its alarms without
+     * ever notifying, silently killing a reminder that had just come due.
+     */
+    @Test
+    fun roll_notifiesForTheJustDueOccurrenceInsteadOfSilentlyRemovingIt() = runTest {
+        val now = System.currentTimeMillis()
+        val notified = mutableListOf<RecordatorioEntity>()
+        insertExpired(Repeticion.NINGUNA, fecha = now - 60_000)
+
+        rollExpiredRecordatorios(context, db, now = now, notifyDue = { notified += it })
+
+        assertEquals(
+            "a due reminder must always be surfaced before it is removed",
+            1,
+            notified.size,
+        )
+        assertEquals("expired", notified.single().texto)
+        assertTrue("the NINGUNA occurrence is still removed after notifying", dao.getAllOnce().isEmpty())
+    }
+
+    @Test
+    fun roll_notifiesOnceAndStillRollsARecurringSeries() = runTest {
+        val now = System.currentTimeMillis()
+        val notified = mutableListOf<RecordatorioEntity>()
+        insertExpired(Repeticion.DIARIA, fecha = now - 60_000)
+
+        rollExpiredRecordatorios(context, db, now = now, notifyDue = { notified += it })
+
+        assertEquals("a recurring expiry must notify exactly once", 1, notified.size)
+        assertTrue(
+            "the recurring occurrence must still advance to the future",
+            dao.getAllOnce().single().fecha > now,
+        )
+    }
+
+    @Test
+    fun roll_doesNotNotifyFutureRecordatorios() = runTest {
+        val now = System.currentTimeMillis()
+        val notified = mutableListOf<RecordatorioEntity>()
+        dao.insert(
+            RecordatorioEntity(
+                texto = "future",
+                fecha = now + 10 * hour,
+                repeticion = Repeticion.DIARIA.name,
+                cloudKey = "keep-me",
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+            ),
+        )
+
+        rollExpiredRecordatorios(context, db, now = now, notifyDue = { notified += it })
+
+        assertTrue("a future reminder must not notify", notified.isEmpty())
+    }
+
+    /**
+     * The toggle gates the notification *show* path, not only the schedule path.
+     */
+    @Test
+    fun notifyExpiredRecordatorio_isGatedByTheToggle() {
+        val entity = RecordatorioEntity(
+            id = 1L,
+            texto = "expired",
+            fecha = 1L,
+            updatedAt = 1L,
+            fechaCreacion = 1L,
+        )
+
+        SessionStore(context).notificationsEnabled = false
+        assertFalse(
+            "a disabled toggle must suppress the notification",
+            notifyExpiredRecordatorio(context, entity),
+        )
+
+        SessionStore(context).notificationsEnabled = true
+        assertTrue(
+            "an enabled toggle must request the notification",
+            notifyExpiredRecordatorio(context, entity),
+        )
+    }
+
+    /**
      * RELI-003: a dormant daily reminder must not roll to a past date, which
      * would leave the series stalled (the scheduler only registers future
      * alarms).
@@ -202,11 +286,11 @@ class RecordatorioActionsTest {
         val failure = IllegalStateException("boom")
 
         val thrown = try {
-            rollExpiredRecordatorios(context, db, now = past + 1_000) {
+            rollExpiredRecordatorios(context, db, now = past + 1_000, nextCloudKey = {
                 generated += 1
                 if (generated == 2) throw failure
                 "new-$generated"
-            }
+            })
             null
         } catch (e: IllegalStateException) {
             e

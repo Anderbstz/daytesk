@@ -88,9 +88,9 @@ object NotificationHelper {
     }
 
     /**
-     * Recordatorio notification, reusing the [CHANNEL_ID] channel. The notify
-     * id shares the recordatorio request-code namespace so it can never
-     * overwrite a task notification with the same numeric id.
+     * Recordatorio notification on the alarm channel. The notify id shares the
+     * recordatorio request-code namespace so it can never overwrite a task
+     * notification with the same numeric id.
      */
     fun showRecordatorio(context: Context, texto: String, recordatorioId: Long, early: Boolean = false) {
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -104,13 +104,20 @@ object NotificationHelper {
         )
 
         val text = if (early) "En 1 hora: $texto" else "Recordatorio: $texto"
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_ALARM)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("\u23F0 Daytesk")
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setSound(alarmSoundUri(), android.media.AudioManager.STREAM_ALARM)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .addAction(
+                0,
+                "Posponer 10 min",
+                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto),
+            )
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

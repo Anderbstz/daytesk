@@ -116,6 +116,28 @@ class SnoozeReceiverTest {
             "Recordatorio: Call mom",
             posted.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString(),
         )
+        assertEquals(
+            "the repost must be alarm-style again",
+            NotificationHelper.CHANNEL_ID_ALARM,
+            posted.channelId,
+        )
+        assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
+    }
+
+    @Test
+    fun snoozeActionOnThePostedRecordatorio_schedulesTheSnoozeAlarm() {
+        NotificationHelper.showRecordatorio(context, "Call mom", 7L)
+        val notification = postedNotifications().single()
+
+        val broadcast = shadowOf(notification.actions.single().actionIntent).savedIntent
+        SnoozeReceiver().onReceive(context, broadcast)
+
+        val alarm = alarms().single()
+        assertEquals("daytesk://recordatorio/7/snooze", dataOf(alarm.operation))
+        assertEquals(
+            ReminderScheduler.recordatorioSnoozeRequestCode(7L),
+            shadowOf(alarm.operation).requestCode,
+        )
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.nuitcode.daytesk.notification
 import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioAttributes
+import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
@@ -12,6 +13,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
 /**
@@ -70,5 +72,36 @@ class NotificationHelperTest {
     fun channelIds_areDistinct() {
         assertEquals("daytesk_alarm_reminders", NotificationHelper.CHANNEL_ID_ALARM)
         assertNotEquals(NotificationHelper.CHANNEL_ID, NotificationHelper.CHANNEL_ID_ALARM)
+    }
+
+    private fun postedNotifications() = shadowOf(manager).allNotifications
+
+    @Test
+    fun showRecordatorio_earlyPostsOnTheAlarmChannelWithAlarmCategoryAndSnoozeAction() {
+        NotificationHelper.showRecordatorio(context, "Call mom", 5L, early = true)
+
+        val posted = postedNotifications().single()
+        assertEquals(NotificationHelper.CHANNEL_ID_ALARM, posted.channelId)
+        assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
+        val action = posted.actions.single()
+        assertEquals("Posponer 10 min", action.title.toString())
+    }
+
+    @Test
+    fun showRecordatorio_duePostsOnTheAlarmChannelWithAlarmCategory() {
+        NotificationHelper.showRecordatorio(context, "Call mom", 5L, early = false)
+
+        val posted = postedNotifications().single()
+        assertEquals(NotificationHelper.CHANNEL_ID_ALARM, posted.channelId)
+        assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
+    }
+
+    @Test
+    fun showTaskReminder_staysOnTheTaskChannel() {
+        NotificationHelper.showTaskReminder(context, "Buy milk", 1L)
+
+        val posted = postedNotifications().single()
+        assertEquals(NotificationHelper.CHANNEL_ID, posted.channelId)
+        assertNotEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
     }
 }

@@ -54,6 +54,9 @@
             android:name=".notification.ReminderReceiver"
             android:exported="false" />
         <receiver
+            android:name=".notification.SnoozeReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".widget.NextTaskWidgetProvider"
             android:exported="true">
             <intent-filter>

@@ -12,6 +12,7 @@ import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.toDomain
 import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Repeticion
+import com.nuitcode.daytesk.notification.ReminderScheduler
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -336,6 +337,63 @@ class RecordatorioActionsTest {
         val stored = dao.getById(futureId)
         assertEquals("a future reminder must not be rolled early", "keep-me", stored?.cloudKey)
         assertTrue("no alarm must be scheduled for a future reminder", scheduledAlarms().isEmpty())
+    }
+
+    private fun snoozeAlarms() = scheduledAlarms().filter {
+        shadowOf(it.operation).savedIntent.data.toString().endsWith("/snooze")
+    }
+
+    @Test
+    fun editingARecordatorio_cancelsItsPendingSnooze() = runTest {
+        val now = System.currentTimeMillis()
+        val id = persistRecordatorio(
+            context,
+            dao,
+            Recordatorio(id = 0, texto = "Buy milk", fecha = now + 3 * hour),
+        )
+        ReminderScheduler.scheduleSnooze(context, id, "Buy milk")
+        assertEquals("precondition: a snooze is pending", 1, snoozeAlarms().size)
+
+        persistRecordatorio(
+            context,
+            dao,
+            Recordatorio(id = id, texto = "Buy oat milk", fecha = now + 4 * hour),
+        )
+
+        assertTrue(
+            "editing a recordatorio invalidates the old snooze",
+            snoozeAlarms().isEmpty(),
+        )
+    }
+
+    @Test
+    fun deletingARecordatorio_cancelsItsPendingSnooze() = runTest {
+        val now = System.currentTimeMillis()
+        val id = persistRecordatorio(
+            context,
+            dao,
+            Recordatorio(id = 0, texto = "Buy milk", fecha = now + 3 * hour),
+        )
+        ReminderScheduler.scheduleSnooze(context, id, "Buy milk")
+        assertEquals(1, snoozeAlarms().size)
+
+        deleteRecordatorio(context, dao, dao.getById(id)!!.toDomain())
+
+        assertTrue("deleting a recordatorio invalidates its snooze", snoozeAlarms().isEmpty())
+    }
+
+    @Test
+    fun rollingAnExpiredRecordatorio_cancelsItsPendingSnooze() = runTest {
+        val expiredId = insertExpired(Repeticion.NINGUNA)
+        ReminderScheduler.scheduleSnooze(context, expiredId, "expired")
+        assertEquals(1, snoozeAlarms().size)
+
+        rollExpiredRecordatorios(context, db, now = past + 1, notifyDue = {})
+
+        assertTrue(
+            "the rolled-away occurrence must not keep a snooze alarm",
+            snoozeAlarms().isEmpty(),
+        )
     }
 
     @Test

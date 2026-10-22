@@ -111,6 +111,10 @@ object ReminderScheduler {
      * Schedules the single alarm behind a 10-minute snooze. It goes through
      * [setAlarm], so the notifications toggle gate and the exact-alarm fallback
      * apply exactly as they do to regular reminder alarms.
+     *
+     * A successfully scheduled snooze is mirrored in [SnoozeStore]; the alarm
+     * is the only copy left once the at-due roll deletes the row, so the
+     * registry is what lets [BootReceiver] re-arm it after a reboot.
      */
     fun scheduleSnooze(
         context: Context,
@@ -119,18 +123,43 @@ object ReminderScheduler {
         delayMillis: Long = SNOOZE_DELAY_MS,
     ) {
         val triggerAt = System.currentTimeMillis() + delayMillis.coerceAtLeast(0L)
-        setAlarm(context, triggerAt, snoozeAlarmPendingIntent(context, id, texto))
+        if (setAlarm(context, triggerAt, snoozeAlarmPendingIntent(context, id, texto))) {
+            SnoozeStore.save(context, id, texto, triggerAt)
+        }
     }
 
     /**
-     * Cancels only the snooze slot. This is intentionally separate from
-     * [cancelRecordatorio]: [scheduleRecordatorio] re-arms reminders on every
-     * app start, so folding the snooze in would silently drop a pending snooze.
-     * It belongs only on identity-invalidating paths (edit, delete, roll).
+     * Cancels only the snooze slot and forgets its persisted entry. This is
+     * intentionally separate from [cancelRecordatorio]: [scheduleRecordatorio]
+     * re-arms reminders on every app start, so folding the snooze in would
+     * silently drop a pending snooze. It belongs only on identity-invalidating
+     * paths (edit, delete, roll).
      */
     fun cancelSnooze(context: Context, id: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.cancel(snoozeAlarmPendingIntent(context, id, ""))
+        SnoozeStore.remove(context, id)
+    }
+
+    /**
+     * Re-arms every persisted snooze that is still in the future and drops the
+     * ones whose trigger time passed while the device was off.
+     *
+     * Called by [BootReceiver]: unlike tareas and recordatorios, a snooze has
+     * no database row to reschedule from.
+     */
+    fun rearmSnoozes(context: Context, now: Long = System.currentTimeMillis()) {
+        SnoozeStore.all(context).forEach { snooze ->
+            if (snooze.triggerAt <= now) {
+                SnoozeStore.remove(context, snooze.id)
+            } else {
+                setAlarm(
+                    context,
+                    snooze.triggerAt,
+                    snoozeAlarmPendingIntent(context, snooze.id, snooze.texto),
+                )
+            }
+        }
     }
 
     /** Re-registers every recordatorio's alarms, e.g. after a reboot or login. */
@@ -170,10 +199,12 @@ object ReminderScheduler {
     /**
      * Single alarm boundary for every reminder kind. Returns early when the
      * user turned notifications off, so no alarm is registered — for tasks or
-     * recordatorios — while the toggle is disabled.
+     * recordatorios — while the toggle is disabled. Returns whether the alarm
+     * was actually registered, so callers can keep their persisted bookkeeping
+     * in sync with the real schedule.
      */
-    private fun setAlarm(context: Context, triggerAtMillis: Long, pending: PendingIntent) {
-        if (!NotificationPreferences.isEnabled(context)) return
+    private fun setAlarm(context: Context, triggerAtMillis: Long, pending: PendingIntent): Boolean {
+        if (!NotificationPreferences.isEnabled(context)) return false
         NotificationHelper.createNotificationChannel(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
@@ -181,6 +212,7 @@ object ReminderScheduler {
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
         }
+        return true
     }
 
     private fun pendingIntent(

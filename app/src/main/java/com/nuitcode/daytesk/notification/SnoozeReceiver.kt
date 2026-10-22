@@ -26,10 +26,15 @@ class SnoozeReceiver : BroadcastReceiver() {
         val texto = intent.getStringExtra(ReminderScheduler.EXTRA_TITLE).orEmpty()
         when (intent.action) {
             ACTION_SNOOZE -> ReminderScheduler.scheduleSnooze(context, id, texto)
-            ACTION_SNOOZE_FIRE -> if (NotificationPreferences.isEnabled(context)) {
-                // Reuse the at-due notification id so the repost replaces the
-                // existing notification instead of stacking a second copy.
-                NotificationHelper.showRecordatorio(context, texto, id, early = false)
+            ACTION_SNOOZE_FIRE -> {
+                // The alarm fired, so it is no longer pending in either the
+                // alarm manager or the persisted registry.
+                SnoozeStore.remove(context, id)
+                if (NotificationPreferences.isEnabled(context)) {
+                    // Reuse the at-due notification id so the repost replaces the
+                    // existing notification instead of stacking a second copy.
+                    NotificationHelper.showRecordatorio(context, texto, id, early = false)
+                }
             }
         }
     }

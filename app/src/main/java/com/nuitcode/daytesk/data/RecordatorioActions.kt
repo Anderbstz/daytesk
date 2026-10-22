@@ -37,6 +37,10 @@ suspend fun persistRecordatorio(
         recordatorio.id
     }
     ReminderScheduler.scheduleRecordatorio(context, id, recordatorio.texto, recordatorio.fecha)
+    // An edit invalidates the identity the pending snooze was captured for.
+    // This is NOT part of cancelRecordatorio: that path re-arms on every app
+    // start and must leave pending snoozes alone.
+    ReminderScheduler.cancelSnooze(context, id)
     RecordatorioWidgetProvider.refresh(context)
     return id
 }
@@ -48,6 +52,7 @@ suspend fun deleteRecordatorio(
     recordatorio: Recordatorio,
 ) {
     ReminderScheduler.cancelRecordatorio(context, recordatorio.id)
+    ReminderScheduler.cancelSnooze(context, recordatorio.id)
     dao.delete(recordatorio.toEntity())
     RecordatorioWidgetProvider.refresh(context)
 }
@@ -170,5 +175,6 @@ suspend fun rollExpiredRecordatorios(
         )
     }
     expired.forEach { ReminderScheduler.cancelRecordatorio(context, it.id) }
+    expired.forEach { ReminderScheduler.cancelSnooze(context, it.id) }
     RecordatorioWidgetProvider.refresh(context)
 }

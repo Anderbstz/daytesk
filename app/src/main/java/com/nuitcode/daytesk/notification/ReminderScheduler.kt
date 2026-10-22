@@ -31,6 +31,16 @@ object ReminderScheduler {
     internal const val RECORDATORIO_OFFSET = 0x20000000
     internal const val EARLY_FLIP = 0x40000000
 
+    /**
+     * A snooze is a third, independent alarm slot for the same recordatorio.
+     * Bit 31 is the only free flag after [RECORDATORIO_OFFSET] and
+     * [EARLY_FLIP], so a snooze can never collide with a task, due or early
+     * alarm. The resulting request code is negative by design.
+     */
+    internal const val SNOOZE_FLIP = Int.MIN_VALUE
+    const val SNOOZE_DELAY_MS = 10 * 60 * 1000L
+    private const val SNOOZE_ACTION_REQUEST_CODE = 5001
+
     fun scheduleIfDue(context: Context, taskId: Long, taskTitle: String, dueMillis: Long?) {
         cancelTaskReminder(context, taskId)
         if (dueMillis == null) return
@@ -97,6 +107,75 @@ object ReminderScheduler {
         alarmManager.cancel(recordatorioPendingIntent(context, id, "", early = true))
     }
 
+    /**
+     * Schedules the single alarm behind a 10-minute snooze. It goes through
+     * [setAlarm], so the notifications toggle gate and the exact-alarm fallback
+     * apply exactly as they do to regular reminder alarms.
+     *
+     * A successfully scheduled snooze is mirrored in [SnoozeStore]; the alarm
+     * is the only copy left once the at-due roll deletes the row, so the
+     * registry is what lets [BootReceiver] re-arm it after a reboot.
+     */
+    fun scheduleSnooze(
+        context: Context,
+        id: Long,
+        texto: String,
+        delayMillis: Long = SNOOZE_DELAY_MS,
+    ) {
+        val triggerAt = System.currentTimeMillis() + delayMillis.coerceAtLeast(0L)
+        if (setAlarm(context, triggerAt, snoozeAlarmPendingIntent(context, id, texto))) {
+            SnoozeStore.save(context, id, texto, triggerAt)
+        }
+    }
+
+    /**
+     * Cancels only the snooze slot and forgets its persisted entry. This is
+     * intentionally separate from [cancelRecordatorio]: [scheduleRecordatorio]
+     * re-arms reminders on every app start, so folding the snooze in would
+     * silently drop a pending snooze. It belongs only on identity-invalidating
+     * paths (edit, delete, roll).
+     */
+    fun cancelSnooze(context: Context, id: Long) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(snoozeAlarmPendingIntent(context, id, ""))
+        SnoozeStore.remove(context, id)
+    }
+
+    /**
+     * Cancels every pending snooze and clears the persisted registry.
+     *
+     * Snooze notifications re-post from Intent extras only, so an alarm armed
+     * under account A would still show A's reminder text after switching to
+     * account B or logging out. Every identity-invalidating path calls this.
+     */
+    fun cancelAllSnoozes(context: Context) {
+        SnoozeStore.all(context).forEach { snooze ->
+            cancelSnooze(context, snooze.id)
+        }
+        SnoozeStore.clear(context)
+    }
+
+    /**
+     * Re-arms every persisted snooze that is still in the future and drops the
+     * ones whose trigger time passed while the device was off.
+     *
+     * Called by [BootReceiver]: unlike tareas and recordatorios, a snooze has
+     * no database row to reschedule from.
+     */
+    fun rearmSnoozes(context: Context, now: Long = System.currentTimeMillis()) {
+        SnoozeStore.all(context).forEach { snooze ->
+            if (snooze.triggerAt <= now) {
+                SnoozeStore.remove(context, snooze.id)
+            } else {
+                setAlarm(
+                    context,
+                    snooze.triggerAt,
+                    snoozeAlarmPendingIntent(context, snooze.id, snooze.texto),
+                )
+            }
+        }
+    }
+
     /** Re-registers every recordatorio's alarms, e.g. after a reboot or login. */
     fun rescheduleRecordatorios(context: Context, recordatorios: List<Recordatorio>) {
         NotificationHelper.createNotificationChannel(context)
@@ -110,6 +189,10 @@ object ReminderScheduler {
         val base = (id and RECORDATORIO_ID_MASK).toInt() or RECORDATORIO_OFFSET
         return if (early) base xor EARLY_FLIP else base
     }
+
+    /** Request code for the recordatorio snooze slot (bit 31 flag). */
+    internal fun recordatorioSnoozeRequestCode(id: Long): Int =
+        recordatorioRequestCode(id, early = false) xor SNOOZE_FLIP
 
     fun canScheduleExactAlarms(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
@@ -130,10 +213,12 @@ object ReminderScheduler {
     /**
      * Single alarm boundary for every reminder kind. Returns early when the
      * user turned notifications off, so no alarm is registered — for tasks or
-     * recordatorios — while the toggle is disabled.
+     * recordatorios — while the toggle is disabled. Returns whether the alarm
+     * was actually registered, so callers can keep their persisted bookkeeping
+     * in sync with the real schedule.
      */
-    private fun setAlarm(context: Context, triggerAtMillis: Long, pending: PendingIntent) {
-        if (!NotificationPreferences.isEnabled(context)) return
+    private fun setAlarm(context: Context, triggerAtMillis: Long, pending: PendingIntent): Boolean {
+        if (!NotificationPreferences.isEnabled(context)) return false
         NotificationHelper.createNotificationChannel(context)
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
@@ -141,6 +226,7 @@ object ReminderScheduler {
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
         }
+        return true
     }
 
     private fun pendingIntent(
@@ -182,6 +268,53 @@ object ReminderScheduler {
         return PendingIntent.getBroadcast(
             context,
             recordatorioRequestCode(id, early),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /**
+     * PendingIntent behind the snooze alarm. It carries the text so the fired
+     * snooze can re-post without reading Room (the row may already be gone).
+     */
+    private fun snoozeAlarmPendingIntent(
+        context: Context,
+        id: Long,
+        texto: String,
+    ): PendingIntent {
+        val intent = Intent(context, SnoozeReceiver::class.java).apply {
+            action = SnoozeReceiver.ACTION_SNOOZE_FIRE
+            data = Uri.parse("daytesk://recordatorio/$id/snooze")
+            putExtra(EXTRA_RECORDATORIO_ID, id)
+            putExtra(EXTRA_TITLE, texto)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            recordatorioSnoozeRequestCode(id),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /**
+     * PendingIntent behind the notification's "Snooze" action. All snooze
+     * actions share one request code; their distinct data Uris keep the
+     * PendingIntent identities apart.
+     */
+    fun snoozeActionPendingIntent(
+        context: Context,
+        id: Long,
+        texto: String,
+    ): PendingIntent {
+        val intent = Intent(context, SnoozeReceiver::class.java).apply {
+            action = SnoozeReceiver.ACTION_SNOOZE
+            data = Uri.parse("daytesk://recordatorio/$id/snooze-action")
+            putExtra(EXTRA_RECORDATORIO_ID, id)
+            putExtra(EXTRA_TITLE, texto)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            SNOOZE_ACTION_REQUEST_CODE,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )

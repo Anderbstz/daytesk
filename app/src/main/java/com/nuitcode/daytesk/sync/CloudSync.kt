@@ -11,6 +11,7 @@ import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.TareaEntity
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
+import com.nuitcode.daytesk.notification.ReminderScheduler
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
 import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import kotlinx.coroutines.CancellationException
@@ -134,6 +135,9 @@ class CloudSync(
             // user content is intentionally discarded.
             database.tareaDao().deleteAll()
             database.recordatorioDao().deleteAll()
+            // The local rows just disappeared, so any snooze armed against
+            // them would re-post the previous account's text (RISK-001).
+            ReminderScheduler.cancelAllSnoozes(context)
             val remote = stripLegacySamples(transport.pull(token).getOrThrow())
             if (remote.contextos.isNotEmpty()) {
                 applyLocked(remote.copy(tareas = emptyList(), recordatorios = emptyList()))
@@ -252,6 +256,11 @@ class CloudSync(
                 )
             }
         }
+        // Every recordatorio now has a fresh id, so a snooze armed against the
+        // replaced local rows can never fire against a valid reminder again;
+        // it would only show stale text. Runs after the commit so a rolled-back
+        // apply leaves pending snoozes untouched (RISK-001).
+        ReminderScheduler.cancelAllSnoozes(context)
     }
 
     /** The local store as a sync snapshot, with `cloudKey`s normalized. */

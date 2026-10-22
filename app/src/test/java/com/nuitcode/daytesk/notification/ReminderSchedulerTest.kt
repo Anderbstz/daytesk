@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.nuitcode.daytesk.auth.SessionStore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -113,6 +114,99 @@ class ReminderSchedulerTest {
         )
 
         assertTrue("a disabled toggle must not schedule any alarm", alarms().isEmpty())
+    }
+
+    @Test
+    fun snoozeRequestCode_isDistinctFromDueEarlyAndTaskCodes() {
+        val id = 3L
+        val snooze = ReminderScheduler.recordatorioSnoozeRequestCode(id)
+
+        assertNotEquals(ReminderScheduler.recordatorioRequestCode(id, early = false), snooze)
+        assertNotEquals(ReminderScheduler.recordatorioRequestCode(id, early = true), snooze)
+        assertNotEquals("snooze must not reuse the task due slot", id.toInt(), snooze)
+        assertNotEquals(
+            "snooze must not reuse the task early slot",
+            id.toInt() xor ReminderScheduler.EARLY_FLIP,
+            snooze,
+        )
+    }
+
+    @Test
+    fun scheduleSnooze_registersOneAlarmInTheSnoozeSlot() {
+        val before = System.currentTimeMillis()
+
+        ReminderScheduler.scheduleSnooze(context, id = 6L, texto = "Call mom")
+
+        val alarm = alarms().single()
+        assertEquals(
+            "a snooze is exactly one alarm",
+            1,
+            alarms().size,
+        )
+        assertEquals("daytesk://recordatorio/6/snooze", dataOf(alarm.operation))
+        assertEquals(
+            ReminderScheduler.recordatorioSnoozeRequestCode(6L),
+            requestCode(alarm.operation),
+        )
+        val expected = before + ReminderScheduler.SNOOZE_DELAY_MS
+        assertTrue(
+            "the snooze must fire about 10 minutes later, got ${alarm.triggerAtMs}",
+            kotlin.math.abs(alarm.triggerAtMs - expected) <= 5_000,
+        )
+        assertEquals("a snooze must never repeat", 0L, alarm.intervalMs)
+    }
+
+    @Test
+    fun scheduleRecordatorio_doesNotCancelAPendingSnooze() {
+        val now = System.currentTimeMillis()
+        ReminderScheduler.scheduleSnooze(context, id = 8L, texto = "Call mom")
+
+        ReminderScheduler.scheduleRecordatorio(context, 8L, "Call mom", now + 3 * hour)
+
+        val snoozes = alarms().filter { dataOf(it.operation).endsWith("/snooze") }
+        assertEquals(
+            "re-arming a recordatorio must not silently drop a pending snooze",
+            1,
+            snoozes.size,
+        )
+        assertEquals(3, alarms().size)
+    }
+
+    @Test
+    fun cancelRecordatorio_leavesAPendingSnoozeAlone() {
+        val now = System.currentTimeMillis()
+        ReminderScheduler.scheduleSnooze(context, id = 10L, texto = "Call mom")
+        ReminderScheduler.scheduleRecordatorio(context, 10L, "Call mom", now + 3 * hour)
+
+        ReminderScheduler.cancelRecordatorio(context, 10L)
+
+        val remaining = alarms().single()
+        assertEquals("daytesk://recordatorio/10/snooze", dataOf(remaining.operation))
+    }
+
+    @Test
+    fun cancelSnooze_cancelsOnlyTheSnoozeAlarm() {
+        val now = System.currentTimeMillis()
+        ReminderScheduler.scheduleSnooze(context, id = 11L, texto = "Call mom")
+        ReminderScheduler.scheduleRecordatorio(context, 11L, "Call mom", now + 3 * hour)
+        assertEquals(3, alarms().size)
+
+        ReminderScheduler.cancelSnooze(context, 11L)
+
+        assertEquals("the due and early alarms must survive", 2, alarms().size)
+        assertTrue(
+            "no snooze alarm may remain",
+            alarms().none { dataOf(it.operation).endsWith("/snooze") },
+        )
+    }
+
+    @Test
+    fun notificationsDisabled_suppressesSnooze() {
+        SessionStore(context).notificationsEnabled = false
+
+        ReminderScheduler.scheduleSnooze(context, id = 12L, texto = "Call mom")
+
+        assertTrue("a disabled toggle must suppress the snooze", alarms().isEmpty())
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.nuitcode.daytesk.sync
 
+import android.app.AlarmManager
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -8,6 +9,8 @@ import com.nuitcode.daytesk.auth.AuthApi
 import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.RecordatorioEntity
+import com.nuitcode.daytesk.notification.ReminderScheduler
+import com.nuitcode.daytesk.notification.SnoozeStore
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -18,6 +21,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.shadows.ShadowLog
 
@@ -43,6 +47,7 @@ class CloudSyncTest {
             .edit()
             .clear()
             .commit()
+        SnoozeStore.clear(context)
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -205,5 +210,50 @@ class CloudSyncTest {
         CloudSync(context, db, sessionStore, transport).onStart()
 
         assertNull("a successful sync must clear the recorded error", sessionStore.lastSyncError)
+    }
+
+    // ── RISK-001: identity-changing syncs must drop pending snoozes ──────────
+
+    private fun snoozeAlarms() =
+        shadowOf(context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).scheduledAlarms
+            .filter {
+                shadowOf(it.operation).savedIntent.data.toString().endsWith("/snooze")
+            }
+
+    @Test
+    fun onStart_whenAnAccountSwitchWipesLocalData_cancelsPendingSnoozes() = runTest {
+        ReminderScheduler.scheduleSnooze(context, id = 71L, texto = "Account A reminder")
+        sessionStore.save("new-token", "New", "new@example.com", newAccount = true)
+        val transport = FakeTransport(Result.success(emptySnapshot()))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertTrue("the wipe branch must clear the snooze registry", SnoozeStore.all(context).isEmpty())
+        assertTrue("the outgoing account's alarm must be cancelled", snoozeAlarms().isEmpty())
+    }
+
+    @Test
+    fun onStart_whenAPullReplacesLocalRows_cancelsPendingSnoozes() = runTest {
+        ReminderScheduler.scheduleSnooze(context, id = 72L, texto = "Stale reminder")
+        val remote = AuthApi.SyncSnapshot(
+            contextos = emptyList(),
+            tareas = emptyList(),
+            recordatorios = listOf(
+                AuthApi.SyncRecordatorioDto(
+                    cloudKey = "remote-1",
+                    texto = "from another device",
+                    fecha = 1L,
+                    repeticion = "NINGUNA",
+                    fechaCreacion = 1L,
+                    updatedAt = 1L,
+                ),
+            ),
+        )
+        val transport = FakeTransport(Result.success(remote))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertTrue("applying a snapshot must clear the snooze registry", SnoozeStore.all(context).isEmpty())
+        assertTrue("a snooze armed against replaced rows must be cancelled", snoozeAlarms().isEmpty())
     }
 }

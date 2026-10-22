@@ -5,6 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import com.nuitcode.daytesk.MainActivity
 import com.nuitcode.daytesk.R
@@ -12,10 +16,17 @@ import com.nuitcode.daytesk.R
 object NotificationHelper {
     const val CHANNEL_ID = "daytesk_reminders"
     const val CHANNEL_NAME = "Recordatorios"
+    const val CHANNEL_ID_ALARM = "daytesk_alarm_reminders"
+    const val CHANNEL_NAME_ALARM = "Recordatorios (alarma)"
     const val REMINDER_REQUEST_CODE = 1001
 
+    /**
+     * Channels are immutable after creation, so the alarm behaviour needs a
+     * brand-new id; the original [CHANNEL_ID] keeps serving task reminders.
+     */
     fun createNotificationChannel(context: Context) {
-        val channel = NotificationChannel(
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val reminders = NotificationChannel(
             CHANNEL_ID,
             CHANNEL_NAME,
             NotificationManager.IMPORTANCE_HIGH,
@@ -23,9 +34,33 @@ object NotificationHelper {
             description = "Recordatorios de tareas pendientes"
             enableVibration(true)
         }
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
+        val alarmReminders = NotificationChannel(
+            CHANNEL_ID_ALARM,
+            CHANNEL_NAME_ALARM,
+            NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Recordatorios con tono de alarma"
+            enableVibration(true)
+            vibrationPattern = longArrayOf(0, 600, 400, 600)
+            setSound(
+                alarmSoundUri(),
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ALARM)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build(),
+            )
+        }
+        manager.createNotificationChannel(reminders)
+        manager.createNotificationChannel(alarmReminders)
     }
+
+    /**
+     * System alarm tone, with a guaranteed non-null fallback so an unavailable
+     * alarm ringtone can never degrade the channel to silence.
+     */
+    internal fun alarmSoundUri(): Uri =
+        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: Settings.System.DEFAULT_ALARM_ALERT_URI
 
     fun showTaskReminder(context: Context, taskTitle: String, taskId: Long, early: Boolean = false) {
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -53,9 +88,9 @@ object NotificationHelper {
     }
 
     /**
-     * Recordatorio notification, reusing the [CHANNEL_ID] channel. The notify
-     * id shares the recordatorio request-code namespace so it can never
-     * overwrite a task notification with the same numeric id.
+     * Recordatorio notification on the alarm channel. The notify id shares the
+     * recordatorio request-code namespace so it can never overwrite a task
+     * notification with the same numeric id.
      */
     fun showRecordatorio(context: Context, texto: String, recordatorioId: Long, early: Boolean = false) {
         val intent = Intent(context, MainActivity::class.java).apply {
@@ -69,13 +104,20 @@ object NotificationHelper {
         )
 
         val text = if (early) "En 1 hora: $texto" else "Recordatorio: $texto"
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID_ALARM)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("\u23F0 Daytesk")
             .setContentText(text)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setSound(alarmSoundUri(), android.media.AudioManager.STREAM_ALARM)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .addAction(
+                0,
+                "Posponer 10 min",
+                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto),
+            )
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -32,6 +32,9 @@ class BootReceiver : BroadcastReceiver() {
                     .first()
                     .map { it.toDomain() }
                 ReminderScheduler.rescheduleRecordatorios(context, recordatorios)
+                // Snoozes have no database row to reschedule from: they are
+                // re-armed from the persisted registry (RESIL-001).
+                ReminderScheduler.rearmSnoozes(context)
                 NextTaskWidgetProvider.refresh(context)
                 // Awaited: the recordatorio render must finish before the
                 // goAsync slot is released, or a kill right after finish()

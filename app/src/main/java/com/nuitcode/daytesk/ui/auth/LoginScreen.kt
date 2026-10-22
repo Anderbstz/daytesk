@@ -30,12 +30,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.R
+import com.nuitcode.daytesk.auth.AccountActions
 import com.nuitcode.daytesk.auth.AuthApi
 import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.AppDatabase
@@ -62,6 +64,7 @@ fun LoginScreen(
     var loading by remember { mutableStateOf(false) }
     var pendingSession by remember { mutableStateOf<AuthApi.LoginResult?>(null) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val canSubmit = if (registerMode) {
         email.isNotBlank() && username.length >= 3 && password.length >= 8
@@ -176,8 +179,7 @@ fun LoginScreen(
                         } else {
                             if (registerMode) {
                                 withContext(Dispatchers.IO) {
-                                    database.tareaDao().deleteAll()
-                                    database.recordatorioDao().deleteAll()
+                                    AccountActions.discardLocalContent(context, database)
                                 }
                             }
                             sessionStore.save(
@@ -258,8 +260,7 @@ fun LoginScreen(
                     onClick = {
                         scope.launch {
                             withContext(Dispatchers.IO) {
-                                database.tareaDao().deleteAll()
-                                database.recordatorioDao().deleteAll()
+                                AccountActions.discardLocalContent(context, database)
                             }
                             sessionStore.save(
                                 session.token,

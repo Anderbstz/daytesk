@@ -12,8 +12,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.navigation3.runtime.NavKey
+import com.nuitcode.daytesk.auth.AccountActions
 import com.nuitcode.daytesk.auth.SessionStore
-import com.nuitcode.daytesk.sync.CloudSync
 import com.nuitcode.daytesk.theme.DayteskTheme
 import com.nuitcode.daytesk.ui.auth.LoginScreen
 
@@ -47,8 +47,9 @@ class MainActivity : ComponentActivity() {
                         database = app.database,
                         initialTab = requestedTab(),
                         onLogout = {
-                            CloudSync.cancelScheduled()
-                            sessionStore.clear()
+                            // Cancels pending snoozes before the session is
+                            // gone, so the old account's reminders go silent.
+                            AccountActions.logout(this@MainActivity)
                             loggedIn = false
                         },
                     )

@@ -142,6 +142,20 @@ object ReminderScheduler {
     }
 
     /**
+     * Cancels every pending snooze and clears the persisted registry.
+     *
+     * Snooze notifications re-post from Intent extras only, so an alarm armed
+     * under account A would still show A's reminder text after switching to
+     * account B or logging out. Every identity-invalidating path calls this.
+     */
+    fun cancelAllSnoozes(context: Context) {
+        SnoozeStore.all(context).forEach { snooze ->
+            cancelSnooze(context, snooze.id)
+        }
+        SnoozeStore.clear(context)
+    }
+
+    /**
      * Re-arms every persisted snooze that is still in the future and drops the
      * ones whose trigger time passed while the device was off.
      *

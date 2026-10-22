@@ -10,6 +10,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.nuitcode.daytesk.auth.SessionStore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -40,14 +41,22 @@ class SnoozeReceiverTest {
             .edit()
             .clear()
             .commit()
+        SnoozeStore.clear(context)
     }
 
-    private fun alarms() =
-        shadowOf(context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).scheduledAlarms
+    private fun alarmManager() =
+        context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
 
-    private fun postedNotifications() =
-        shadowOf(context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .allNotifications
+    private fun notificationManager() =
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+    private fun alarms() = shadowOf(alarmManager()).scheduledAlarms
+
+    private fun postedNotifications() = shadowOf(notificationManager()).allNotifications
+
+    private fun notificationById(id: Long) =
+        shadowOf(notificationManager())
+            .getNotification(ReminderScheduler.recordatorioRequestCode(id, early = false))
 
     private fun actionIntent(id: Long, texto: String = "Call mom") =
         Intent(context, SnoozeReceiver::class.java).apply {
@@ -100,20 +109,23 @@ class SnoozeReceiverTest {
         // No row with id 4242 exists (and no database is created at all): the
         // repost must come from the extras, because the at-due roll deleted the
         // original row before the snooze fired.
-        NotificationHelper.showRecordatorio(context, "Call mom", 4242L, early = false)
-        assertEquals(1, postedNotifications().size)
-
-        SnoozeReceiver().onReceive(context, fireIntent(4242L, "Call mom"))
-
-        assertEquals(
-            "the snoozed repost must replace the old notification, not stack",
-            1,
-            postedNotifications().size,
+        //
+        // Deliberately start from NO posted notification: a no-op receiver
+        // would leave the list empty and fail here, which is what the previous
+        // version of this test could never detect.
+        val id = 4242L
+        val texto = "Distinctive snooze text 4242"
+        assertTrue(
+            "the test must start with no posted notification",
+            postedNotifications().isEmpty(),
         )
+
+        SnoozeReceiver().onReceive(context, fireIntent(id, texto))
+
         val posted = postedNotifications().single()
         assertEquals(
             "the repost must render the text carried by the Intent",
-            "Recordatorio: Call mom",
+            "Recordatorio: $texto",
             posted.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString(),
         )
         assertEquals(
@@ -122,6 +134,32 @@ class SnoozeReceiverTest {
             posted.channelId,
         )
         assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
+        assertNotNull(
+            "the repost must reuse the recordatorio at-due notification id",
+            notificationById(id),
+        )
+    }
+
+    @Test
+    fun snoozeFire_replacesAnExistingNotificationWithTheSameIdInsteadOfStacking() {
+        val id = 4343L
+        NotificationHelper.showRecordatorio(context, "stale text", id, early = false)
+        assertEquals(1, postedNotifications().size)
+
+        SnoozeReceiver().onReceive(context, fireIntent(id, "fresh text"))
+
+        assertEquals(
+            "the snoozed repost must replace the old notification, not stack",
+            1,
+            postedNotifications().size,
+        )
+        val posted = notificationById(id)
+        assertNotNull("the replacement must keep the at-due notification id", posted)
+        assertEquals(
+            "the existing notification must be updated with the fired text",
+            "Recordatorio: fresh text",
+            posted!!.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString(),
+        )
     }
 
     @Test

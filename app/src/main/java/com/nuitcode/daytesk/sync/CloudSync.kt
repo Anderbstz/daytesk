@@ -325,7 +325,61 @@ class CloudSync(
      */
     private suspend fun pushLocked(token: String) {
         sessionStore.hasPendingPush = true
+        persistMissingCloudKeys()
         transport.push(token, localSnapshot()).getOrThrow()
         sessionStore.hasPendingPush = false
+    }
+
+    /**
+     * Assigns a stable `cloudKey` to every legacy row that still has a blank
+     * one, and persists it before the snapshot is built.
+     *
+     * ## Why this exists
+     *
+     * `localSnapshot()` used to mint a fresh random UUID for each blank key on
+     * every push, without writing it back to Room. The server replaces rows by
+     * `(user_id, cloud_key)`, so every sync invented a new identity and the
+     * account accumulated byte-identical duplicates with different keys.
+     *
+     * ## Why runtime and not a SQL migration
+     *
+     * SQLite has no UUID generator, so a migration would need
+     * `hex(randomblob(16))` plus per-table UPDATEs. Doing it in Kotlin keeps one
+     * canonical UUID source ([UUID]) and the existing `default-<id>` convention
+     * for the four seeded contextos (ids 1..4) so already-synced cloud data
+     * keeps matching.
+     *
+     * Runs in one [withSyncTransaction], so it is atomic, and only touches
+     * blank keys, so it is idempotent and never rewrites an identity that
+     * already exists.
+     */
+    private suspend fun persistMissingCloudKeys() {
+        database.withSyncTransaction {
+            val tareaDao = database.tareaDao()
+            tareaDao.getAllOnce().forEach { entity ->
+                if (entity.cloudKey.isBlank()) {
+                    tareaDao.updateTarea(entity.copy(cloudKey = UUID.randomUUID().toString()))
+                }
+            }
+
+            val recordatorioDao = database.recordatorioDao()
+            recordatorioDao.getAllOnce().forEach { entity ->
+                if (entity.cloudKey.isBlank()) {
+                    recordatorioDao.update(entity.copy(cloudKey = UUID.randomUUID().toString()))
+                }
+            }
+
+            val contextoDao = database.contextoDao()
+            contextoDao.getAllOnce().forEach { entity ->
+                if (entity.cloudKey.isBlank()) {
+                    val key = if (entity.id in 1L..4L) {
+                        "default-${entity.id}"
+                    } else {
+                        UUID.randomUUID().toString()
+                    }
+                    contextoDao.update(entity.copy(cloudKey = key))
+                }
+            }
+        }
     }
 }

@@ -56,6 +56,7 @@ import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
+import com.nuitcode.daytesk.ui.blockTouchPassthrough
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -112,6 +113,7 @@ fun NuevaTareaModal(
         modifier = Modifier
             .fillMaxSize()
             .background(DayteskColors.Background)
+            .blockTouchPassthrough()
             .systemBarsPadding()
     ) {
             // ── Top bar ─────────────────────────────────────

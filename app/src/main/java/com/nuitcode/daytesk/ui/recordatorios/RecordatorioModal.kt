@@ -48,6 +48,7 @@ import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
+import com.nuitcode.daytesk.ui.blockTouchPassthrough
 import com.nuitcode.daytesk.ui.modals.DayteskDatePickerDialog
 import com.nuitcode.daytesk.ui.modals.DayteskTimePickerDialog
 import java.text.SimpleDateFormat
@@ -108,6 +109,7 @@ fun RecordatorioModal(
         modifier = Modifier
             .fillMaxSize()
             .background(DayteskColors.Background)
+            .blockTouchPassthrough()
             .systemBarsPadding(),
     ) {
         // ── Top bar ─────────────────────────────────────

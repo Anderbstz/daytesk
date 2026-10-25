@@ -16,13 +16,31 @@ import com.nuitcode.daytesk.R
 object NotificationHelper {
     const val CHANNEL_ID = "daytesk_reminders"
     const val CHANNEL_NAME = "Recordatorios"
-    const val CHANNEL_ID_ALARM = "daytesk_alarm_reminders"
+
+    /**
+     * Notification channels are IMMUTABLE after creation: a channel created by
+     * an earlier build keeps its original sound/vibration settings forever, and
+     * there is no API to mutate it. The alarm channel therefore lives under a
+     * versioned id. Bump the suffix whenever its configuration must change —
+     * reusing the old id would silently keep the broken configuration on every
+     * device that already created it.
+     */
+    const val CHANNEL_ID_ALARM = "daytesk_alarm_reminders_v2"
     const val CHANNEL_NAME_ALARM = "Recordatorios (alarma)"
+
+    /**
+     * The v1 alarm channel id created by earlier builds. It is kept only so it
+     * can be deleted; deleting is the one legal way to retire an immutable
+     * channel. Never post to it again.
+     */
+    const val CHANNEL_ID_ALARM_LEGACY = "daytesk_alarm_reminders"
     const val REMINDER_REQUEST_CODE = 1001
 
     /**
      * Channels are immutable after creation, so the alarm behaviour needs a
      * brand-new id; the original [CHANNEL_ID] keeps serving task reminders.
+     * The legacy alarm channel is deleted so users do not see a dead duplicate
+     * in system settings whose stale configuration no longer applies.
      */
     fun createNotificationChannel(context: Context) {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -41,7 +59,7 @@ object NotificationHelper {
         ).apply {
             description = "Recordatorios con tono de alarma"
             enableVibration(true)
-            vibrationPattern = longArrayOf(0, 600, 400, 600)
+            vibrationPattern = ALARM_VIBRATION_PATTERN
             setSound(
                 alarmSoundUri(),
                 AudioAttributes.Builder()
@@ -52,7 +70,11 @@ object NotificationHelper {
         }
         manager.createNotificationChannel(reminders)
         manager.createNotificationChannel(alarmReminders)
+        manager.deleteNotificationChannel(CHANNEL_ID_ALARM_LEGACY)
     }
+
+    /** Short-long vibration so the alarm is felt, not only heard. */
+    private val ALARM_VIBRATION_PATTERN = longArrayOf(0, 600, 400, 600)
 
     /**
      * System alarm tone, with a guaranteed non-null fallback so an unavailable
@@ -116,7 +138,7 @@ object NotificationHelper {
             .addAction(
                 0,
                 "Posponer 10 min",
-                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto),
+                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto, notifyId),
             )
             .build()
 

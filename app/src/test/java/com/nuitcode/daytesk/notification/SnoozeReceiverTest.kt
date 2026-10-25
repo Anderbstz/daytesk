@@ -11,6 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.nuitcode.daytesk.auth.SessionStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -176,6 +177,89 @@ class SnoozeReceiverTest {
             ReminderScheduler.recordatorioSnoozeRequestCode(7L),
             shadowOf(alarm.operation).requestCode,
         )
+    }
+
+    /**
+     * On-device the snooze tap looked dead because nothing left the screen.
+     * The action must dismiss the exact notification the user tapped (its
+     * notify id travels in the action Intent) before it schedules.
+     */
+    @Test
+    fun snoozeActionOnThePostedRecordatorio_dismissesTheSourceNotificationImmediately() {
+        val id = 5050L
+        NotificationHelper.showRecordatorio(context, "Call mom", id)
+        val sourceId = ReminderScheduler.recordatorioRequestCode(id, early = false)
+        assertNotNull(shadowOf(notificationManager()).getNotification(sourceId))
+
+        val broadcast = shadowOf(postedNotifications().single().actions.single().actionIntent).savedIntent
+        SnoozeReceiver().onReceive(context, broadcast)
+
+        assertNull(
+            "the notification the user tapped must disappear on tap",
+            shadowOf(notificationManager()).getNotification(sourceId),
+        )
+        assertTrue("no notification may remain visible", postedNotifications().isEmpty())
+    }
+
+    @Test
+    fun snoozeActionOnTheEarlyRecordatorio_dismissesTheEarlyNotificationOnly() {
+        val id = 5151L
+        NotificationHelper.showRecordatorio(context, "Call mom", id, early = true)
+        val earlyId = ReminderScheduler.recordatorioRequestCode(id, early = true)
+        val dueId = ReminderScheduler.recordatorioRequestCode(id, early = false)
+
+        val broadcast = shadowOf(postedNotifications().single().actions.single().actionIntent).savedIntent
+        SnoozeReceiver().onReceive(context, broadcast)
+
+        assertNull(
+            "the tapped 1h-early notification must be cancelled by its own id",
+            shadowOf(notificationManager()).getNotification(earlyId),
+        )
+        assertNull(
+            "the later at-due notification is not posted yet and must not be cancelled by mistake",
+            shadowOf(notificationManager()).getNotification(dueId),
+        )
+        assertTrue(postedNotifications().isEmpty())
+    }
+
+    /**
+     * Full path with the real widget wiring: post through [NotificationHelper],
+     * pull the action PendingIntent out of the posted notification, tap it, then
+     * fire the alarm it scheduled. This is the coverage the old direct-Intent
+     * tests lacked, and the one that would have caught the broken action wiring.
+     */
+    @Test
+    fun snoozeTapThenFire_dismissesTheSourceAndRepostsExactlyOneNotification() {
+        val id = 5252L
+        val texto = "End to end snooze 5252"
+        NotificationHelper.showRecordatorio(context, texto, id, early = true)
+        val earlyId = ReminderScheduler.recordatorioRequestCode(id, early = true)
+        val dueId = ReminderScheduler.recordatorioRequestCode(id, early = false)
+
+        val tap = shadowOf(postedNotifications().single().actions.single().actionIntent).savedIntent
+        SnoozeReceiver().onReceive(context, tap)
+
+        assertNull(
+            "the tapped notification must be gone right after the tap",
+            shadowOf(notificationManager()).getNotification(earlyId),
+        )
+        assertTrue("the snooze tap must leave the shade empty", postedNotifications().isEmpty())
+
+        val snoozeAlarm = alarms().single()
+        SnoozeReceiver().onReceive(context, shadowOf(snoozeAlarm.operation).savedIntent)
+
+        assertEquals("the fired snooze must post exactly one notification", 1, postedNotifications().size)
+        val reposted = postedNotifications().single()
+        assertNotNull(
+            "the repost must use the stable at-due notify id",
+            shadowOf(notificationManager()).getNotification(dueId),
+        )
+        assertEquals(
+            "the repost must render the text carried through the snooze",
+            "Recordatorio: $texto",
+            reposted.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString(),
+        )
+        assertEquals(NotificationHelper.CHANNEL_ID_ALARM, reposted.channelId)
     }
 
     @Test

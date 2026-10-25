@@ -16,6 +16,13 @@ object ReminderScheduler {
     const val EXTRA_RECORDATORIO_ID = "recordatorio_id"
     const val EXTRA_TITLE = "task_title"
     const val EXTRA_EARLY = "early"
+
+    /**
+     * The notify id of the notification whose snooze action was tapped. The
+     * action carries it so the receiver cancels exactly that notification: the
+     * 1h-early and at-due notifications use different notify ids.
+     */
+    const val EXTRA_NOTIFY_ID = "notify_id"
     const val WEEKLY_REVIEW_ID = 0L
     private const val HOUR_MS = 60 * 60 * 1000L
 
@@ -300,17 +307,23 @@ object ReminderScheduler {
      * PendingIntent behind the notification's "Snooze" action. All snooze
      * actions share one request code; their distinct data Uris keep the
      * PendingIntent identities apart.
+     *
+     * [notifyId] travels as an extra so [SnoozeReceiver] can dismiss the exact
+     * notification the user tapped (the early and at-due notifications have
+     * different notify ids).
      */
     fun snoozeActionPendingIntent(
         context: Context,
         id: Long,
         texto: String,
+        notifyId: Int = recordatorioRequestCode(id, early = false),
     ): PendingIntent {
         val intent = Intent(context, SnoozeReceiver::class.java).apply {
             action = SnoozeReceiver.ACTION_SNOOZE
             data = Uri.parse("daytesk://recordatorio/$id/snooze-action")
             putExtra(EXTRA_RECORDATORIO_ID, id)
             putExtra(EXTRA_TITLE, texto)
+            putExtra(EXTRA_NOTIFY_ID, notifyId)
         }
         return PendingIntent.getBroadcast(
             context,

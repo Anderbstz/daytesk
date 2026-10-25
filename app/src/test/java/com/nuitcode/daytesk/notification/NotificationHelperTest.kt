@@ -1,5 +1,6 @@
 package com.nuitcode.daytesk.notification
 
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.media.AudioAttributes
@@ -70,8 +71,33 @@ class NotificationHelperTest {
 
     @Test
     fun channelIds_areDistinct() {
-        assertEquals("daytesk_alarm_reminders", NotificationHelper.CHANNEL_ID_ALARM)
+        // Channels are immutable: the vibration fix ships under a NEW id. The
+        // old "daytesk_alarm_reminders" id may exist on installed devices with
+        // the broken configuration and must never be reused.
+        assertEquals("daytesk_alarm_reminders_v2", NotificationHelper.CHANNEL_ID_ALARM)
         assertNotEquals(NotificationHelper.CHANNEL_ID, NotificationHelper.CHANNEL_ID_ALARM)
+    }
+
+    @Test
+    fun createNotificationChannel_deletesTheLegacyAlarmChannel() {
+        val legacy = NotificationChannel(
+            NotificationHelper.CHANNEL_ID_ALARM_LEGACY,
+            "Recordatorios (alarma)",
+            NotificationManager.IMPORTANCE_HIGH,
+        )
+        manager.createNotificationChannel(legacy)
+
+        NotificationHelper.createNotificationChannel(context)
+
+        assertEquals(
+            "the immutable legacy channel must be cleaned up, not reused",
+            null,
+            manager.getNotificationChannel(NotificationHelper.CHANNEL_ID_ALARM_LEGACY),
+        )
+        assertNotNull(
+            "the fresh alarm channel must exist",
+            manager.getNotificationChannel(NotificationHelper.CHANNEL_ID_ALARM),
+        )
     }
 
     private fun postedNotifications() = shadowOf(manager).allNotifications

@@ -138,7 +138,7 @@ object NotificationHelper {
             .addAction(
                 0,
                 "Posponer 10 min",
-                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto),
+                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto, notifyId),
             )
             .build()
 

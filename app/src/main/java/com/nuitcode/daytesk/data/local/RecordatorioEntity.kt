@@ -22,6 +22,8 @@ data class RecordatorioEntity(
     val cloudKey: String = "",
     val updatedAt: Long,
     val fechaCreacion: Long,
+    /** Opt-in vibration-only alarm mode; `0` for every pre-v7 row. */
+    val esAlarma: Boolean = false,
 )
 
 /**
@@ -36,6 +38,7 @@ fun RecordatorioEntity.toDomain(): Recordatorio = Recordatorio(
     cloudKey = cloudKey.ifBlank { "local-recordatorio-$id" },
     updatedAt = updatedAt,
     fechaCreacion = fechaCreacion,
+    esAlarma = esAlarma,
 )
 
 /**
@@ -52,4 +55,5 @@ fun Recordatorio.toEntity(): RecordatorioEntity = RecordatorioEntity(
     },
     updatedAt = updatedAt,
     fechaCreacion = fechaCreacion,
+    esAlarma = esAlarma,
 )

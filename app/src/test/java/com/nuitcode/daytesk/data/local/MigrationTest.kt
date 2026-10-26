@@ -275,6 +275,41 @@ class MigrationTest {
     }
 
     /**
+     * Strict TDD — RED test written before [Migrations.MIGRATION_6_7] and
+     * [Migrations.ALTER_RECORDATORIOS_ADD_ES_ALARMA_DDL] exist.
+     *
+     * v6 -> v7 contract: `recordatorios` gains
+     * `esAlarma INTEGER NOT NULL DEFAULT 0`, so every existing row decodes as
+     * Stage 1 (`false`) without a table rebuild.
+     */
+    @Test
+    fun migration_v6ToV7_addsEsAlarmaDefaultingToZero() {
+        db.execSQL(Migrations.CREATE_RECORDATORIOS_DDL)
+        db.execSQL(
+            "INSERT INTO recordatorios (texto, fecha, repeticion, cloudKey, updatedAt, fechaCreacion) " +
+                "VALUES ('legacy', 1000, 'NINGUNA', 'legacy-1', 1, 1)",
+        )
+
+        db.beginTransaction()
+        try {
+            db.execSQL(Migrations.ALTER_RECORDATORIOS_ADD_ES_ALARMA_DDL)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        db.rawQuery("PRAGMA table_info(recordatorios)", null).use { c ->
+            val columns = mutableListOf<String>()
+            while (c.moveToNext()) columns.add(c.getString(c.getColumnIndexOrThrow("name")))
+            assertTrue("the new column must exist", "esAlarma" in columns)
+        }
+        db.rawQuery("SELECT esAlarma FROM recordatorios WHERE cloudKey = 'legacy-1'", null).use { c ->
+            assertTrue("the legacy row must survive the migration", c.moveToFirst())
+            assertEquals("existing rows must decode as Stage 1", 0, c.getInt(0))
+        }
+    }
+
+    /**
      * Strict TDD — RED test written before [Migrations.MIGRATION_5_6] and
      * [Migrations.DROP_INBOX_ITEMS_DDL] exist.
      *

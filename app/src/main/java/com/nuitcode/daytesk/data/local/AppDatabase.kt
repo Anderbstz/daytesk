@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 
 @Database(
     entities = [TareaEntity::class, RecordatorioEntity::class, ContextoEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -41,6 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
                     Migrations.MIGRATION_3_4,
                     Migrations.MIGRATION_4_5,
                     Migrations.MIGRATION_5_6,
+                    Migrations.MIGRATION_6_7,
                 )
                 .addCallback(
                     object : Callback() {

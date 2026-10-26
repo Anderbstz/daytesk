@@ -62,6 +62,28 @@ class RecordatorioDaoTest {
     }
 
     @Test
+    fun insert_persistsTheAlarmFlagAndDefaultsItOff() = runTest {
+        val alarmId = dao.insert(
+            RecordatorioEntity(
+                texto = "Wake up",
+                fecha = 1_000L,
+                esAlarma = true,
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+            ),
+        )
+        val plainId = dao.insert(
+            RecordatorioEntity(texto = "Buy milk", fecha = 2_000L, updatedAt = 1L, fechaCreacion = 1L),
+        )
+
+        assertEquals("the alarm flag must round-trip through Room", true, dao.getById(alarmId)?.esAlarma)
+        assertEquals("rows written before the flag must default to off", false, dao.getById(plainId)?.esAlarma)
+
+        val mapped = dao.getById(alarmId)!!.toDomain()
+        assertEquals("the entity mapper must preserve the flag", true, mapped.esAlarma)
+    }
+
+    @Test
     fun getAllRecordatorios_emitsSoonestFirst() = runTest {
         dao.insert(RecordatorioEntity(texto = "later", fecha = 3_000L, updatedAt = 1L, fechaCreacion = 1L))
         dao.insert(RecordatorioEntity(texto = "soonest", fecha = 1_000L, updatedAt = 1L, fechaCreacion = 1L))

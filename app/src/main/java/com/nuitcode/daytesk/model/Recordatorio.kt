@@ -21,4 +21,10 @@ data class Recordatorio(
     val cloudKey: String = java.util.UUID.randomUUID().toString(),
     val updatedAt: Long = System.currentTimeMillis(),
     val fechaCreacion: Long = System.currentTimeMillis(),
+    /**
+     * Opt-in alarm mode: the due alarm drives a repeating vibration instead of
+     * the ordinary Stage 1 notification. Vibration only — this flag never
+     * enables audio. Defaults to `false` so every existing row stays Stage 1.
+     */
+    val esAlarma: Boolean = false,
 )

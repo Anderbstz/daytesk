@@ -8,6 +8,7 @@ import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.toEntity
 import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Repeticion
+import com.nuitcode.daytesk.notification.AlarmVibrationService
 import com.nuitcode.daytesk.notification.NotificationHelper
 import com.nuitcode.daytesk.notification.NotificationPreferences
 import com.nuitcode.daytesk.notification.ReminderScheduler
@@ -36,7 +37,13 @@ suspend fun persistRecordatorio(
         dao.update(entity)
         recordatorio.id
     }
-    ReminderScheduler.scheduleRecordatorio(context, id, recordatorio.texto, recordatorio.fecha)
+    ReminderScheduler.scheduleRecordatorio(
+        context,
+        id,
+        recordatorio.texto,
+        recordatorio.fecha,
+        recordatorio.esAlarma,
+    )
     // An edit invalidates the identity the pending snooze was captured for.
     // This is NOT part of cancelRecordatorio: that path re-arms on every app
     // start and must leave pending snoozes alone.
@@ -73,7 +80,18 @@ private data class RolledOccurrence(val id: Long, val entity: RecordatorioEntity
  */
 internal fun notifyExpiredRecordatorio(context: Context, entity: RecordatorioEntity): Boolean {
     if (!NotificationPreferences.isEnabled(context)) return false
-    NotificationHelper.showRecordatorio(context, entity.texto, entity.id, early = false)
+    if (entity.esAlarma && AlarmVibrationService.start(context, entity.id, entity.texto)) {
+        return true
+    }
+    // Non-alarm reminders keep Stage 1; alarm-mode reminders fall back to it
+    // when the device cannot vibrate or the service start is rejected.
+    NotificationHelper.showRecordatorio(
+        context,
+        entity.texto,
+        entity.id,
+        early = false,
+        esAlarma = entity.esAlarma,
+    )
     return true
 }
 
@@ -157,6 +175,8 @@ suspend fun rollExpiredRecordatorios(
                     cloudKey = nextCloudKey(),
                     updatedAt = now,
                     fechaCreacion = now,
+                    // Alarm mode belongs to the reminder, not to one occurrence.
+                    esAlarma = entity.esAlarma,
                 )
                 rolled += RolledOccurrence(dao.insert(next), next)
             }
@@ -172,6 +192,7 @@ suspend fun rollExpiredRecordatorios(
             occurrence.id,
             occurrence.entity.texto,
             occurrence.entity.fecha,
+            occurrence.entity.esAlarma,
         )
     }
     expired.forEach { ReminderScheduler.cancelRecordatorio(context, it.id) }

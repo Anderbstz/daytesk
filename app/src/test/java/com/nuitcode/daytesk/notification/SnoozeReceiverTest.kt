@@ -263,6 +263,43 @@ class SnoozeReceiverTest {
     }
 
     @Test
+    fun snoozeAction_withAlarmFlag_persistsTheFlagOnTheNewSnooze() {
+        val intent = actionIntent(6161L).apply {
+            putExtra(ReminderScheduler.EXTRA_ES_ALARMA, true)
+        }
+
+        SnoozeReceiver().onReceive(context, intent)
+
+        assertTrue(
+            "the snooze must remember that it belongs to an alarm-mode reminder",
+            SnoozeStore.all(context).single().esAlarma,
+        )
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun snoozeFire_alarmMode_startsTheVibrationServiceInsteadOfPostingANotification() {
+        val launched = mutableListOf<Intent>()
+        val previous = AlarmVibrationService.startService
+        AlarmVibrationService.startService = { _, intent -> launched += intent }
+        try {
+            val intent = fireIntent(6262L, "Wake up").apply {
+                putExtra(ReminderScheduler.EXTRA_ES_ALARMA, true)
+            }
+
+            SnoozeReceiver().onReceive(context, intent)
+        } finally {
+            AlarmVibrationService.startService = previous
+        }
+
+        assertEquals("the fired alarm-mode snooze must ring", 1, launched.size)
+        assertTrue(
+            "the ringing snooze must not also post the Stage 1 notification",
+            postedNotifications().isEmpty(),
+        )
+    }
+
+    @Test
     fun snoozeFire_isSuppressedWhileNotificationsAreDisabled() {
         SessionStore(context).notificationsEnabled = false
 

@@ -26,6 +26,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowAlarmManager
 
 /**
  * Strict TDD — RED test written before `RecordatorioActions` exists.
@@ -134,6 +135,48 @@ class RecordatorioActionsTest {
             2,
             scheduledAlarms().size,
         )
+    }
+
+    @Test
+    fun roll_carriesTheAlarmFlagToTheNextOccurrence() = runTest {
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        val now = System.currentTimeMillis()
+        dao.insert(
+            RecordatorioEntity(
+                texto = "Wake up",
+                fecha = now - hour,
+                repeticion = Repeticion.DIARIA.name,
+                cloudKey = "old-alarm",
+                esAlarma = true,
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+            ),
+        )
+
+        rollExpiredRecordatorios(context, db, now = now)
+
+        val next = dao.getAllOnce().single()
+        assertTrue("the repeating reminder must keep vibrating", next.esAlarma)
+        val due = scheduledAlarms().single {
+            shadowOf(it.operation).savedIntent.data.toString().endsWith("/due")
+        }
+        assertNotNull("the rolled alarm-mode occurrence must be an alarm clock", due.getAlarmClockInfo())
+    }
+
+    @Test
+    fun persistRecordatorio_storesTheAlarmFlag() = runTest {
+        val id = persistRecordatorio(
+            context,
+            dao,
+            Recordatorio(
+                id = 0,
+                texto = "Wake up",
+                fecha = System.currentTimeMillis() + 3 * hour,
+                esAlarma = true,
+            ),
+        )
+
+        assertTrue(dao.getById(id)!!.esAlarma)
     }
 
     @Test

@@ -170,6 +170,34 @@ object Migrations {
             }
         }
     }
+
+    /**
+     * Canonical statement that adds the opt-in alarm flag.
+     *
+     * Exposed as a literal so [MIGRATION_6_7] and `MigrationTest` execute the
+     * exact same statement — the test can never drift from production DDL.
+     *
+     * `NOT NULL DEFAULT 0` is what makes the upgrade safe: every existing
+     * recordatorio becomes Stage 1 (`false`) without a table rebuild.
+     */
+    const val ALTER_RECORDATORIOS_ADD_ES_ALARMA_DDL: String =
+        "ALTER TABLE `recordatorios` ADD COLUMN `esAlarma` INTEGER NOT NULL DEFAULT 0"
+
+    /**
+     * **MIGRATION_6_7** — adds `recordatorios.esAlarma` (vibration-only alarm
+     * mode). Runs in a transaction like every other migration.
+     */
+    val MIGRATION_6_7: Migration = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL(ALTER_RECORDATORIOS_ADD_ES_ALARMA_DDL)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
 }
 
 /**

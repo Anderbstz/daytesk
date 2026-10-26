@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import com.nuitcode.daytesk.MainActivity
 import com.nuitcode.daytesk.model.Recordatorio
 import com.nuitcode.daytesk.model.Tarea
 import com.nuitcode.daytesk.model.TareaEstado
@@ -16,6 +17,8 @@ object ReminderScheduler {
     const val EXTRA_RECORDATORIO_ID = "recordatorio_id"
     const val EXTRA_TITLE = "task_title"
     const val EXTRA_EARLY = "early"
+    /** Carries the opt-in vibration-only alarm mode through every reminder path. */
+    const val EXTRA_ES_ALARMA = "es_alarma"
 
     /**
      * The notify id of the notification whose snooze action was tapped. The
@@ -47,6 +50,13 @@ object ReminderScheduler {
     internal const val SNOOZE_FLIP = Int.MIN_VALUE
     const val SNOOZE_DELAY_MS = 10 * 60 * 1000L
     private const val SNOOZE_ACTION_REQUEST_CODE = 5001
+
+    /** Request code of the activity shown by the system alarm-clock indicator. */
+    internal const val ALARM_SHOW_REQUEST_CODE = 6001
+
+    /** Safety stop for a ringing alarm: the service dies after this delay. */
+    const val RING_TIMEOUT_MS = 2 * 60 * 1000L
+    internal const val RING_TIMEOUT_REQUEST_CODE = 7001
 
     fun scheduleIfDue(context: Context, taskId: Long, taskTitle: String, dueMillis: Long?) {
         cancelTaskReminder(context, taskId)
@@ -96,22 +106,58 @@ object ReminderScheduler {
      * and one at `fecha`, each only when still in the future. Existing alarms
      * for the same id are cancelled first so an edit never leaves a stale one.
      */
-    fun scheduleRecordatorio(context: Context, id: Long, texto: String, fecha: Long) {
+    fun scheduleRecordatorio(
+        context: Context,
+        id: Long,
+        texto: String,
+        fecha: Long,
+        esAlarma: Boolean = false,
+    ) {
         cancelRecordatorio(context, id)
         val now = System.currentTimeMillis()
         if (fecha > now) {
-            setAlarm(context, fecha, recordatorioPendingIntent(context, id, texto, early = false))
+            val due = recordatorioPendingIntent(context, id, texto, early = false, esAlarma = esAlarma)
+            if (isAlarmClockSlot(esAlarma, early = false)) {
+                setAlarmClock(context, fecha, due, id)
+            } else {
+                setAlarm(context, fecha, due)
+            }
         }
         val earlyAt = fecha - HOUR_MS
         if (earlyAt > now) {
-            setAlarm(context, earlyAt, recordatorioPendingIntent(context, id, texto, early = true))
+            // The T-1h heads-up stays a plain alarm in every mode: only the
+            // at-due occurrence is allowed to take over the system alarm clock.
+            setAlarm(
+                context,
+                earlyAt,
+                recordatorioPendingIntent(context, id, texto, early = true, esAlarma = esAlarma),
+            )
         }
     }
+
+    /** Only the at-due occurrence of an alarm-mode reminder is an alarm clock. */
+    internal fun isAlarmClockSlot(esAlarma: Boolean, early: Boolean): Boolean = esAlarma && !early
 
     fun cancelRecordatorio(context: Context, id: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         alarmManager.cancel(recordatorioPendingIntent(context, id, "", early = false))
         alarmManager.cancel(recordatorioPendingIntent(context, id, "", early = true))
+    }
+
+    /**
+     * Arms the 2-minute safety stop for a ringing alarm.
+     *
+     * Deliberately bypasses the notifications toggle: a stop must never depend
+     * on a user preference, or the vibration could run forever.
+     */
+    fun setRingTimeout(context: Context, id: Long) {
+        val triggerAt = System.currentTimeMillis() + RING_TIMEOUT_MS
+        scheduleExactAt(context, triggerAt, ringTimeoutPendingIntent(context, id, ""))
+    }
+
+    fun cancelRingTimeout(context: Context, id: Long) {
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(ringTimeoutPendingIntent(context, id, ""))
     }
 
     /**
@@ -128,10 +174,11 @@ object ReminderScheduler {
         id: Long,
         texto: String,
         delayMillis: Long = SNOOZE_DELAY_MS,
+        esAlarma: Boolean = false,
     ) {
         val triggerAt = System.currentTimeMillis() + delayMillis.coerceAtLeast(0L)
-        if (setAlarm(context, triggerAt, snoozeAlarmPendingIntent(context, id, texto))) {
-            SnoozeStore.save(context, id, texto, triggerAt)
+        if (setAlarm(context, triggerAt, snoozeAlarmPendingIntent(context, id, texto, esAlarma))) {
+            SnoozeStore.save(context, id, texto, triggerAt, esAlarma)
         }
     }
 
@@ -177,7 +224,7 @@ object ReminderScheduler {
                 setAlarm(
                     context,
                     snooze.triggerAt,
-                    snoozeAlarmPendingIntent(context, snooze.id, snooze.texto),
+                    snoozeAlarmPendingIntent(context, snooze.id, snooze.texto, snooze.esAlarma),
                 )
             }
         }
@@ -187,7 +234,13 @@ object ReminderScheduler {
     fun rescheduleRecordatorios(context: Context, recordatorios: List<Recordatorio>) {
         NotificationHelper.createNotificationChannel(context)
         recordatorios.forEach { recordatorio ->
-            scheduleRecordatorio(context, recordatorio.id, recordatorio.texto, recordatorio.fecha)
+            scheduleRecordatorio(
+                context,
+                recordatorio.id,
+                recordatorio.texto,
+                recordatorio.fecha,
+                recordatorio.esAlarma,
+            )
         }
     }
 
@@ -227,13 +280,81 @@ object ReminderScheduler {
     private fun setAlarm(context: Context, triggerAtMillis: Long, pending: PendingIntent): Boolean {
         if (!NotificationPreferences.isEnabled(context)) return false
         NotificationHelper.createNotificationChannel(context)
+        scheduleExactAt(context, triggerAtMillis, pending)
+        return true
+    }
+
+    /**
+     * Registers an exact alarm when the OS allows it and degrades to an
+     * inexact one otherwise. Shared by reminders and the ungated ring timeout.
+     */
+    private fun scheduleExactAt(context: Context, triggerAtMillis: Long, pending: PendingIntent) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
         } else {
             alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pending)
         }
-        return true
+    }
+
+    /**
+     * Arms the due alarm as an alarm clock, which is what makes MIUI/Doze treat
+     * it like the system clock. Reuses the caller's broadcast PendingIntent so
+     * the request-code namespace, [cancelRecordatorio] and boot re-arming keep
+     * working unchanged. Without the exact-alarm grant it degrades to a plain
+     * alarm instead of throwing.
+     */
+    private fun setAlarmClock(
+        context: Context,
+        triggerAtMillis: Long,
+        pending: PendingIntent,
+        id: Long,
+    ) {
+        if (!NotificationPreferences.isEnabled(context)) return
+        NotificationHelper.createNotificationChannel(context)
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+            scheduleExactAt(context, triggerAtMillis, pending)
+            return
+        }
+        alarmManager.setAlarmClock(
+            AlarmManager.AlarmClockInfo(triggerAtMillis, alarmShowIntent(context, id)),
+            pending,
+        )
+    }
+
+    /** Activity surface behind the system alarm-clock indicator tap. */
+    private fun alarmShowIntent(context: Context, id: Long): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            data = Uri.parse("daytesk://recordatorio/$id/show")
+            putExtra(EXTRA_RECORDATORIO_ID, id)
+        }
+        return PendingIntent.getActivity(
+            context,
+            ALARM_SHOW_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun ringTimeoutPendingIntent(
+        context: Context,
+        id: Long,
+        texto: String,
+    ): PendingIntent {
+        val intent = Intent(context, RingTimeoutReceiver::class.java).apply {
+            action = RingTimeoutReceiver.ACTION_RING_TIMEOUT
+            data = Uri.parse("daytesk://recordatorio/$id/timeout")
+            putExtra(EXTRA_RECORDATORIO_ID, id)
+            putExtra(EXTRA_TITLE, texto)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            RING_TIMEOUT_REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun pendingIntent(
@@ -263,6 +384,7 @@ object ReminderScheduler {
         id: Long,
         texto: String,
         early: Boolean,
+        esAlarma: Boolean = false,
     ): PendingIntent {
         val kind = if (early) "early" else "due"
         val intent = Intent(context, ReminderReceiver::class.java).apply {
@@ -271,6 +393,7 @@ object ReminderScheduler {
             putExtra(EXTRA_RECORDATORIO_ID, id)
             putExtra(EXTRA_TITLE, texto)
             putExtra(EXTRA_EARLY, early)
+            putExtra(EXTRA_ES_ALARMA, esAlarma)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -288,12 +411,14 @@ object ReminderScheduler {
         context: Context,
         id: Long,
         texto: String,
+        esAlarma: Boolean = false,
     ): PendingIntent {
         val intent = Intent(context, SnoozeReceiver::class.java).apply {
             action = SnoozeReceiver.ACTION_SNOOZE_FIRE
             data = Uri.parse("daytesk://recordatorio/$id/snooze")
             putExtra(EXTRA_RECORDATORIO_ID, id)
             putExtra(EXTRA_TITLE, texto)
+            putExtra(EXTRA_ES_ALARMA, esAlarma)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -317,6 +442,7 @@ object ReminderScheduler {
         id: Long,
         texto: String,
         notifyId: Int = recordatorioRequestCode(id, early = false),
+        esAlarma: Boolean = false,
     ): PendingIntent {
         val intent = Intent(context, SnoozeReceiver::class.java).apply {
             action = SnoozeReceiver.ACTION_SNOOZE
@@ -324,6 +450,7 @@ object ReminderScheduler {
             putExtra(EXTRA_RECORDATORIO_ID, id)
             putExtra(EXTRA_TITLE, texto)
             putExtra(EXTRA_NOTIFY_ID, notifyId)
+            putExtra(EXTRA_ES_ALARMA, esAlarma)
         }
         return PendingIntent.getBroadcast(
             context,

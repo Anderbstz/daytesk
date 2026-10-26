@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -81,6 +82,9 @@ fun RecordatorioModal(
     var repeticion by rememberSaveable(initial?.id) {
         mutableStateOf(initial?.repeticion ?: Repeticion.NINGUNA)
     }
+    var esAlarma by rememberSaveable(initial?.id) {
+        mutableStateOf(initial?.esAlarma ?: false)
+    }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
     var pendingDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -99,6 +103,7 @@ fun RecordatorioModal(
         cloudKey = initial?.cloudKey ?: java.util.UUID.randomUUID().toString(),
         fechaCreacion = initial?.fechaCreacion ?: System.currentTimeMillis(),
         updatedAt = System.currentTimeMillis(),
+        esAlarma = esAlarma,
     )
 
     // The modal is an overlay, not a navigation entry, so system back must be
@@ -236,6 +241,31 @@ fun RecordatorioModal(
                         )
                     }
                 }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = DayteskSpacing.lg)
+                    .semantics { testTag = "recordatorio_alarm_switch" },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Modo alarma",
+                        style = DayteskTypography.bodySm,
+                        color = DayteskColors.TextPrimary,
+                    )
+                    Text(
+                        text = "Vibra hasta que lo cortes",
+                        style = DayteskTypography.caption,
+                        color = DayteskColors.TextSecondary,
+                    )
+                }
+                Switch(
+                    checked = esAlarma,
+                    onCheckedChange = { esAlarma = it },
+                )
             }
 
             Box(

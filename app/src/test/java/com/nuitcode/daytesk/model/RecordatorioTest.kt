@@ -53,6 +53,17 @@ class RecordatorioTest {
     }
 
     @Test
+    fun defaultsToAlarmModeOff() {
+        val recordatorio = Recordatorio(id = 0L, texto = "Call mom", fecha = 1L)
+
+        assertEquals(
+            "existing reminders must stay Stage 1 until the user opts in",
+            false,
+            recordatorio.esAlarma,
+        )
+    }
+
+    @Test
     fun generatesDistinctCloudKeysWhenAbsent() {
         val first = Recordatorio(id = 0L, texto = "Call mom", fecha = 1L)
         val second = Recordatorio(id = 0L, texto = "Call mom", fecha = 1L)

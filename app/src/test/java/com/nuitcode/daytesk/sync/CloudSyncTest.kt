@@ -138,6 +138,45 @@ class CloudSyncTest {
     }
 
     @Test
+    fun onStart_withRemoteContent_preservesEsAlarmaAcrossTheWipeForTheSameCloudKey() = runTest {
+        db.recordatorioDao().insert(
+            RecordatorioEntity(
+                texto = "Wake up",
+                fecha = System.currentTimeMillis() + 3_600_000L,
+                repeticion = "NINGUNA",
+                cloudKey = "shared-1",
+                esAlarma = true,
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+            ),
+        )
+        val remote = AuthApi.SyncSnapshot(
+            contextos = emptyList(),
+            tareas = emptyList(),
+            recordatorios = listOf(
+                AuthApi.SyncRecordatorioDto(
+                    cloudKey = "shared-1",
+                    texto = "Wake up",
+                    fecha = 1L,
+                    repeticion = "NINGUNA",
+                    fechaCreacion = 1L,
+                    updatedAt = 2L,
+                ),
+            ),
+        )
+        val transport = FakeTransport(Result.success(remote))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        val applied = db.recordatorioDao().getAllOnce().single()
+        assertEquals("shared-1", applied.cloudKey)
+        assertTrue(
+            "a pull must never silently reset the user's alarm mode",
+            applied.esAlarma,
+        )
+    }
+
+    @Test
     fun onStart_withLocalContentAndEmptyRemote_pushesTheLocalRow() = runTest {
         insertLocalRecordatorio("local-1")
         val transport = FakeTransport(Result.success(emptySnapshot()))

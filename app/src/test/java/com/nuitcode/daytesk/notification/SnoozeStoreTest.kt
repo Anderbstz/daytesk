@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.nuitcode.daytesk.auth.SessionStore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -65,6 +66,51 @@ class SnoozeStoreTest {
         assertTrue(
             "the stored trigger must match the scheduled alarm, got ${stored.triggerAt}",
             kotlin.math.abs(stored.triggerAt - expected) <= 5_000,
+        )
+    }
+
+    @Test
+    fun scheduleSnooze_alarmModeEncodesFourFieldsAndRoundTripsTheFlag() {
+        ReminderScheduler.scheduleSnooze(context, id = 23L, texto = "Wake up", esAlarma = true)
+
+        val raw = context.getSharedPreferences("daytesk_snoozes", Context.MODE_PRIVATE)
+            .getString("snooze_23", null)
+        val fields = raw?.split("\n") ?: emptyList()
+        assertEquals("the record must carry id, triggerAt, text and the flag", 4, fields.size)
+        assertEquals("true", fields[3])
+
+        val stored = SnoozeStore.all(context).single()
+        assertEquals(23L, stored.id)
+        assertTrue("the alarm flag must survive the registry", stored.esAlarma)
+    }
+
+    @Test
+    fun legacyThreeFieldEntry_decodesAsNonAlarm() {
+        // A snooze persisted by the previous build has three newline fields.
+        context.getSharedPreferences("daytesk_snoozes", Context.MODE_PRIVATE)
+            .edit()
+            .putString("snooze_24", "24\n${System.currentTimeMillis() + 60_000}\nCall mom")
+            .commit()
+
+        val stored = SnoozeStore.all(context).single()
+
+        assertEquals(24L, stored.id)
+        assertEquals("Call mom", stored.texto)
+        assertFalse("a legacy snooze must decode as Stage 1", stored.esAlarma)
+    }
+
+    @Test
+    fun rearmSnoozes_keepsTheAlarmFlagOnTheRearmedAlarm() {
+        val triggerAt = System.currentTimeMillis() + 7 * 60 * 1000L
+        SnoozeStore.save(context, id = 25L, texto = "Wake up", triggerAt = triggerAt, esAlarma = true)
+
+        ReminderScheduler.rearmSnoozes(context)
+
+        val alarm = snoozeAlarms().single()
+        val fired = shadowOf(alarm.operation).savedIntent
+        assertTrue(
+            "the re-armed snooze must still vibrate",
+            fired.getBooleanExtra(ReminderScheduler.EXTRA_ES_ALARMA, false),
         )
     }
 

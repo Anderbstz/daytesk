@@ -3,6 +3,7 @@ package com.nuitcode.daytesk.notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.nuitcode.daytesk.auth.SessionStore
@@ -44,6 +45,73 @@ class ReminderReceiverTest {
     private fun weeklyReviewIntent() = Intent(context, ReminderReceiver::class.java).apply {
         putExtra(ReminderScheduler.EXTRA_TASK_ID, ReminderScheduler.WEEKLY_REVIEW_ID)
         putExtra(ReminderScheduler.EXTRA_TITLE, "Revisión semanal")
+    }
+
+    @Test
+    fun onlyTheDueOccurrenceOfAnEnabledAlarmModeReminderStartsTheRing() {
+        assertTrue(
+            "only the at-due alarm of an alarm-mode reminder may ring",
+            shouldStartAlarmVibration(early = false, esAlarma = true, notificationsEnabled = true),
+        )
+        assertTrue(
+            "the T-1h heads-up must never ring",
+            !shouldStartAlarmVibration(early = true, esAlarma = true, notificationsEnabled = true),
+        )
+        assertTrue(
+            "a Stage 1 reminder must never ring",
+            !shouldStartAlarmVibration(early = false, esAlarma = false, notificationsEnabled = true),
+        )
+        assertTrue(
+            "a disabled toggle must suppress the ring",
+            !shouldStartAlarmVibration(early = false, esAlarma = true, notificationsEnabled = false),
+        )
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun alarmMode_startStartsTheVibrationService() {
+        val launched = mutableListOf<Intent>()
+        val previous = AlarmVibrationService.startService
+        AlarmVibrationService.startService = { _, intent -> launched += intent }
+        try {
+            val started = startAlarmVibrationOrFallback(context, 77L, "Wake up")
+            assertTrue("the alarm-mode due reminder must ring", started)
+        } finally {
+            AlarmVibrationService.startService = previous
+        }
+
+        assertEquals("the service must be started exactly once", 1, launched.size)
+        assertEquals(
+            "the service must receive the reminder id",
+            77L,
+            launched.single().getLongExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, -1L),
+        )
+        assertTrue(
+            "the ringing reminder must not also post the Stage 1 notification",
+            postedNotifications().isEmpty(),
+        )
+    }
+
+    @Test
+    @Config(sdk = [30])
+    fun serviceStartFailure_fallsBackToTheStage1Notification() {
+        val previous = AlarmVibrationService.startService
+        AlarmVibrationService.startService = { _, _ -> throw SecurityException("blocked") }
+        try {
+            val started = startAlarmVibrationOrFallback(context, 77L, "Wake up")
+            assertTrue("the caller must observe that the service did not start", !started)
+        } finally {
+            AlarmVibrationService.startService = previous
+        }
+
+        val posted = postedNotifications().single()
+        assertEquals(NotificationHelper.CHANNEL_ID_ALARM, posted.channelId)
+        assertEquals(NotificationCompat.CATEGORY_ALARM, posted.category)
+        assertEquals(
+            "the fallback must still surface the reminder",
+            "Recordatorio: Wake up",
+            posted.extras.getCharSequence(NotificationCompat.EXTRA_TEXT).toString(),
+        )
     }
 
     @Test

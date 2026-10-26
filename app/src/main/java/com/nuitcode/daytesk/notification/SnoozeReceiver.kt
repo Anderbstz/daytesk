@@ -31,18 +31,34 @@ class SnoozeReceiver : BroadcastReceiver() {
         val id = intent.getLongExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, -1L)
         if (id < 0L) return
         val texto = intent.getStringExtra(ReminderScheduler.EXTRA_TITLE).orEmpty()
+        val esAlarma = intent.getBooleanExtra(ReminderScheduler.EXTRA_ES_ALARMA, false)
         when (intent.action) {
             ACTION_SNOOZE -> {
                 // Cancel first: if scheduling fails, the user still sees the
                 // tap acknowledged instead of a notification that looks dead.
                 dismissTappedNotification(context, intent)
-                ReminderScheduler.scheduleSnooze(context, id, texto)
+                // A ringing alarm must fall silent the moment the user snoozes.
+                if (esAlarma) AlarmVibrationService.stop(context)
+                ReminderScheduler.scheduleSnooze(context, id, texto, esAlarma = esAlarma)
             }
             ACTION_SNOOZE_FIRE -> {
                 // The alarm fired, so it is no longer pending in either the
                 // alarm manager or the persisted registry.
                 SnoozeStore.remove(context, id)
-                if (NotificationPreferences.isEnabled(context)) {
+                if (!NotificationPreferences.isEnabled(context)) return
+                if (esAlarma) {
+                    // Alarm mode keeps vibrating; never degrade to nothing if
+                    // the foreground service cannot start.
+                    if (!AlarmVibrationService.start(context, id, texto)) {
+                        NotificationHelper.showRecordatorio(
+                            context,
+                            texto,
+                            id,
+                            early = false,
+                            esAlarma = true,
+                        )
+                    }
+                } else {
                     // Repost on the stable at-due notification id: the tapped
                     // source was already dismissed, so nothing can stack.
                     NotificationHelper.showRecordatorio(context, texto, id, early = false)

@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.nuitcode.daytesk.data.local.AppDatabase
+import com.nuitcode.daytesk.data.notifyExpiredRecordatorio
 import com.nuitcode.daytesk.data.rollExpiredRecordatorios
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +43,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     NotificationHelper.showTaskReminder(context, title, taskId, early)
                 }
             } finally {
-                pending.finish()
+                pending?.finish()
             }
         }
     }
@@ -67,6 +68,17 @@ class ReminderReceiver : BroadcastReceiver() {
     private fun onRecordatorioAlarm(context: Context, intent: Intent, recordatorioId: Long) {
         val early = intent.getBooleanExtra(ReminderScheduler.EXTRA_EARLY, false)
         val title = intent.getStringExtra(ReminderScheduler.EXTRA_TITLE).orEmpty()
+        val esAlarma = intent.getBooleanExtra(ReminderScheduler.EXTRA_ES_ALARMA, false)
+
+        // Alarm mode must be started synchronously in `onReceive`: the
+        // foreground-service window closes as soon as the receiver returns.
+        // The flag travels in the Intent precisely so this needs no Room read.
+        var ringingStarted = false
+        var fallbackPosted = false
+        if (shouldStartAlarmVibration(early, esAlarma, NotificationPreferences.isEnabled(context))) {
+            ringingStarted = startAlarmVibrationOrFallback(context, recordatorioId, title)
+            fallbackPosted = !ringingStarted
+        }
 
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
@@ -81,22 +93,58 @@ class ReminderReceiver : BroadcastReceiver() {
                             title.ifBlank { recordatorio.texto },
                             recordatorioId,
                             early = true,
+                            esAlarma = recordatorio.esAlarma,
                         )
                     }
                     return@launch
                 }
-                rollExpiredRecordatorios(context, database)
-                if (dao.getById(recordatorioId) != null && NotificationPreferences.isEnabled(context)) {
+                rollExpiredRecordatorios(
+                    context,
+                    database,
+                    notifyDue = { entity ->
+                        if (entity.id == recordatorioId && (ringingStarted || fallbackPosted)) {
+                            // Already surfaced synchronously above.
+                        } else {
+                            notifyExpiredRecordatorio(context, entity)
+                        }
+                    },
+                )
+                if (dao.getById(recordatorioId) != null &&
+                    NotificationPreferences.isEnabled(context) &&
+                    !(esAlarma && (ringingStarted || fallbackPosted))
+                ) {
                     NotificationHelper.showRecordatorio(
                         context,
                         title.ifBlank { recordatorio.texto },
                         recordatorioId,
                         early = false,
+                        esAlarma = esAlarma || recordatorio.esAlarma,
                     )
                 }
             } finally {
-                pending.finish()
+                pending?.finish()
             }
         }
     }
+}
+
+/**
+ * Alarm mode applies only to the at-due occurrence and only while the user has
+ * notifications enabled. The T-1h heads-up always stays Stage 1.
+ */
+internal fun shouldStartAlarmVibration(
+    early: Boolean,
+    esAlarma: Boolean,
+    notificationsEnabled: Boolean,
+): Boolean = !early && esAlarma && notificationsEnabled
+
+/**
+ * Starts the vibration ring; when the platform rejects it (or the device has no
+ * vibrator) the Stage 1 alarm notification posts instead. Returns whether the
+ * service started. Never leaves the user with nothing.
+ */
+internal fun startAlarmVibrationOrFallback(context: Context, id: Long, texto: String): Boolean {
+    if (AlarmVibrationService.start(context, id, texto)) return true
+    NotificationHelper.showRecordatorio(context, texto, id, early = false, esAlarma = true)
+    return false
 }

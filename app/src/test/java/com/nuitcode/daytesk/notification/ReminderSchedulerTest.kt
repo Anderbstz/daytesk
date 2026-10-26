@@ -8,6 +8,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.nuitcode.daytesk.auth.SessionStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -84,6 +86,82 @@ class ReminderSchedulerTest {
 
         assertEquals("the 1h-before alarm is already in the past", 1, alarms().size)
         assertEquals("daytesk://recordatorio/7/due", dataOf(alarms().single().operation))
+    }
+
+    @Test
+    fun alarmMode_armsTheDueAlarmAsAlarmClockAndTheEarlyAlarmAsSetAlarm() {
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        val now = System.currentTimeMillis()
+
+        ReminderScheduler.scheduleRecordatorio(
+            context,
+            id = 13L,
+            texto = "Wake up",
+            fecha = now + 3 * hour,
+            esAlarma = true,
+        )
+
+        val due = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/13/due" }
+        val early = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/13/early" }
+        assertNotNull("the alarm-mode due alarm must be an alarm clock", due.getAlarmClockInfo())
+        assertEquals(
+            "the alarm clock must publish an action to open the reminder",
+            ReminderScheduler.ALARM_SHOW_REQUEST_CODE,
+            requestCode(due.showIntent!!),
+        )
+        assertNull("the T-1h alarm must stay a plain alarm in every mode", early.getAlarmClockInfo())
+    }
+
+    @Test
+    fun nonAlarmMode_keepsTheDueAlarmAsAPlainAlarm() {
+        val now = System.currentTimeMillis()
+
+        ReminderScheduler.scheduleRecordatorio(
+            context,
+            id = 14L,
+            texto = "Water plants",
+            fecha = now + 3 * hour,
+            esAlarma = false,
+        )
+
+        val due = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/14/due" }
+        assertNull("only alarm-mode reminders may take over the system alarm clock", due.getAlarmClockInfo())
+    }
+
+    @Test
+    fun setRingTimeout_armsAStopAlarmEvenWhileNotificationsAreDisabled() {
+        SessionStore(context).notificationsEnabled = false
+        val before = System.currentTimeMillis()
+
+        ReminderScheduler.setRingTimeout(context, id = 15L)
+
+        val timeout = alarms().single()
+        assertEquals("daytesk://recordatorio/15/timeout", dataOf(timeout.operation))
+        assertEquals(
+            ReminderScheduler.RING_TIMEOUT_REQUEST_CODE,
+            requestCode(timeout.operation),
+        )
+        val expected = before + ReminderScheduler.RING_TIMEOUT_MS
+        assertTrue(
+            "the safety stop must fire ~2 minutes later, got ${timeout.triggerAtMs}",
+            kotlin.math.abs(timeout.triggerAtMs - expected) <= 5_000,
+        )
+    }
+
+    @Test
+    fun cancelRingTimeout_cancelsOnlyTheTimeoutAlarm() {
+        val now = System.currentTimeMillis()
+        ReminderScheduler.scheduleRecordatorio(context, 16L, "Wake up", now + 3 * hour, esAlarma = true)
+        ReminderScheduler.setRingTimeout(context, 16L)
+        assertEquals(3, alarms().size)
+
+        ReminderScheduler.cancelRingTimeout(context, 16L)
+
+        assertTrue(
+            "no timeout alarm may remain",
+            alarms().none { dataOf(it.operation).endsWith("/timeout") },
+        )
+        assertEquals("the reminder alarms must survive", 2, alarms().size)
     }
 
     @Test

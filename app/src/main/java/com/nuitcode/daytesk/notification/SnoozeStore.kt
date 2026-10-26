@@ -7,6 +7,8 @@ data class PendingSnooze(
     val id: Long,
     val texto: String,
     val triggerAt: Long,
+    /** Opt-in alarm mode must survive the snooze round-trip. */
+    val esAlarma: Boolean = false,
 )
 
 /**
@@ -27,11 +29,17 @@ object SnoozeStore {
     private const val KEY_PREFIX = "snooze_"
     private const val FIELD_SEPARATOR = "\n"
 
-    fun save(context: Context, id: Long, texto: String, triggerAt: Long) {
+    fun save(
+        context: Context,
+        id: Long,
+        texto: String,
+        triggerAt: Long,
+        esAlarma: Boolean = false,
+    ) {
         // commit(), not apply(): this record only matters if it survives the
         // process death that follows the receiver returning.
         prefs(context).edit()
-            .putString(key(id), encode(PendingSnooze(id, texto, triggerAt)))
+            .putString(key(id), encode(PendingSnooze(id, texto, triggerAt, esAlarma)))
             .commit()
     }
 
@@ -54,14 +62,17 @@ object SnoozeStore {
     private fun key(id: Long) = "$KEY_PREFIX$id"
 
     private fun encode(entry: PendingSnooze): String =
-        listOf(entry.id, entry.triggerAt, entry.texto).joinToString(FIELD_SEPARATOR)
+        listOf(entry.id, entry.triggerAt, entry.texto, entry.esAlarma).joinToString(FIELD_SEPARATOR)
 
     private fun decode(raw: String?): PendingSnooze? {
-        // limit = 3 keeps every newline inside the display text.
-        val parts = raw?.split(FIELD_SEPARATOR, limit = 3) ?: return null
-        if (parts.size != 3) return null
+        // limit = 4 keeps every newline inside the display text (field 3).
+        val parts = raw?.split(FIELD_SEPARATOR, limit = 4) ?: return null
+        if (parts.size < 3) return null
         val id = parts[0].toLongOrNull() ?: return null
         val triggerAt = parts[1].toLongOrNull() ?: return null
-        return PendingSnooze(id, parts[2], triggerAt)
+        // Three-field entries were written before alarm mode existed; they must
+        // decode as Stage 1 instead of being dropped.
+        val esAlarma = parts.getOrNull(3)?.toBooleanStrictOrNull() ?: false
+        return PendingSnooze(id, parts[2], triggerAt, esAlarma)
     }
 }

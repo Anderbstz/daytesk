@@ -37,6 +37,15 @@ object NotificationHelper {
     const val REMINDER_REQUEST_CODE = 1001
 
     /**
+     * Foreground-service channel for a ringing alarm. The vibration is driven
+     * directly by the service, so this channel must be silent: no sound, no
+     * notification vibration, low importance.
+     */
+    const val CHANNEL_ID_RING = "daytesk_alarm_ring_v1"
+    const val CHANNEL_NAME_RING = "Recordatorio vibrando"
+    const val RING_NOTIFICATION_ID = 9001
+
+    /**
      * Channels are immutable after creation, so the alarm behaviour needs a
      * brand-new id; the original [CHANNEL_ID] keeps serving task reminders.
      * The legacy alarm channel is deleted so users do not see a dead duplicate
@@ -68,8 +77,18 @@ object NotificationHelper {
                     .build(),
             )
         }
+        val ring = NotificationChannel(
+            CHANNEL_ID_RING,
+            CHANNEL_NAME_RING,
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "Recordatorio en modo alarma: solo vibración"
+            setSound(null, null)
+            enableVibration(false)
+        }
         manager.createNotificationChannel(reminders)
         manager.createNotificationChannel(alarmReminders)
+        manager.createNotificationChannel(ring)
         manager.deleteNotificationChannel(CHANNEL_ID_ALARM_LEGACY)
     }
 
@@ -114,7 +133,13 @@ object NotificationHelper {
      * recordatorio request-code namespace so it can never overwrite a task
      * notification with the same numeric id.
      */
-    fun showRecordatorio(context: Context, texto: String, recordatorioId: Long, early: Boolean = false) {
+    fun showRecordatorio(
+        context: Context,
+        texto: String,
+        recordatorioId: Long,
+        early: Boolean = false,
+        esAlarma: Boolean = false,
+    ) {
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, recordatorioId)
@@ -138,11 +163,56 @@ object NotificationHelper {
             .addAction(
                 0,
                 "Posponer 10 min",
-                ReminderScheduler.snoozeActionPendingIntent(context, recordatorioId, texto, notifyId),
+                ReminderScheduler.snoozeActionPendingIntent(
+                    context,
+                    recordatorioId,
+                    texto,
+                    notifyId,
+                    esAlarma,
+                ),
             )
             .build()
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(notifyId, notification)
     }
+
+    /**
+     * Silent foreground notification for [AlarmVibrationService]. It exists so
+     * the process survives while the vibrator runs; the sound is deliberately
+     * absent, and the vibration comes from the service, not from this channel.
+     */
+    fun buildRingNotification(context: Context, recordatorioId: Long, texto: String) =
+        NotificationCompat.Builder(context, CHANNEL_ID_RING)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("\u23F0 Daytesk")
+            .setContentText("Recordatorio: $texto")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setOngoing(true)
+            .setSilent(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    context,
+                    RING_NOTIFICATION_ID,
+                    Intent(context, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        putExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, recordatorioId)
+                    },
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            .addAction(0, "Descartar", AlarmVibrationService.dismissPendingIntent(context, recordatorioId))
+            .addAction(
+                0,
+                "Posponer 10 min",
+                ReminderScheduler.snoozeActionPendingIntent(
+                    context,
+                    recordatorioId,
+                    texto,
+                    RING_NOTIFICATION_ID,
+                    esAlarma = true,
+                ),
+            )
+            .build()
 }

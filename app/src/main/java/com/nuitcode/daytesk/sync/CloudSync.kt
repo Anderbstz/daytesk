@@ -198,6 +198,15 @@ class CloudSync(
         database.withSyncTransaction {
             val merged = snapshot.mergePreservingLocal(localSnapshot())
 
+            // The server contract has no `esAlarma` field, so the wipe below
+            // would silently reset the user's alarm mode on every pull. Capture
+            // the flags from the local snapshot BEFORE deleting and re-apply
+            // them by cloudKey on insert.
+            val preservedAlarmFlags = database.recordatorioDao().getAllOnce()
+                .associate {
+                    it.cloudKey.ifBlank { "local-recordatorio-${it.id}" } to it.esAlarma
+                }
+
             val contextoDao = database.contextoDao()
             val tareaDao = database.tareaDao()
             val recordatorioDao = database.recordatorioDao()
@@ -252,6 +261,7 @@ class CloudSync(
                         cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
                         updatedAt = item.updatedAt,
                         fechaCreacion = item.fechaCreacion,
+                        esAlarma = preservedAlarmFlags[item.cloudKey] ?: false,
                     ),
                 )
             }

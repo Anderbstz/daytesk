@@ -89,7 +89,7 @@ class ReminderSchedulerTest {
     }
 
     @Test
-    fun alarmMode_armsTheDueAlarmAsAlarmClockAndTheEarlyAlarmAsSetAlarm() {
+    fun alarmMode_armsBothTheEarlyAndDueAlarmsAsAlarmClocks() {
         ShadowAlarmManager.setCanScheduleExactAlarms(true)
         val now = System.currentTimeMillis()
 
@@ -104,16 +104,24 @@ class ReminderSchedulerTest {
         val due = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/13/due" }
         val early = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/13/early" }
         assertNotNull("the alarm-mode due alarm must be an alarm clock", due.getAlarmClockInfo())
+        assertNotNull(
+            "the alarm-mode T-1h alarm must be an alarm clock too, or MIUI blocks its service start",
+            early.getAlarmClockInfo(),
+        )
         assertEquals(
             "the alarm clock must publish an action to open the reminder",
             ReminderScheduler.ALARM_SHOW_REQUEST_CODE,
             requestCode(due.showIntent!!),
         )
-        assertNull("the T-1h alarm must stay a plain alarm in every mode", early.getAlarmClockInfo())
+        assertEquals(
+            "the early alarm clock must publish the same open action",
+            ReminderScheduler.ALARM_SHOW_REQUEST_CODE,
+            requestCode(early.showIntent!!),
+        )
     }
 
     @Test
-    fun nonAlarmMode_keepsTheDueAlarmAsAPlainAlarm() {
+    fun nonAlarmMode_keepsBothAlarmsAsPlainAlarms() {
         val now = System.currentTimeMillis()
 
         ReminderScheduler.scheduleRecordatorio(
@@ -125,7 +133,9 @@ class ReminderSchedulerTest {
         )
 
         val due = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/14/due" }
+        val early = alarms().single { dataOf(it.operation) == "daytesk://recordatorio/14/early" }
         assertNull("only alarm-mode reminders may take over the system alarm clock", due.getAlarmClockInfo())
+        assertNull("a non-alarm early reminder must stay a plain alarm", early.getAlarmClockInfo())
     }
 
     @Test

@@ -48,22 +48,66 @@ class ReminderReceiverTest {
     }
 
     @Test
-    fun onlyTheDueOccurrenceOfAnEnabledAlarmModeReminderStartsTheRing() {
+    fun bothOccurrencesOfAnEnabledAlarmModeReminderStartTheRing() {
         assertTrue(
-            "only the at-due alarm of an alarm-mode reminder may ring",
+            "the at-due alarm of an alarm-mode reminder must ring",
             shouldStartAlarmVibration(early = false, esAlarma = true, notificationsEnabled = true),
         )
         assertTrue(
-            "the T-1h heads-up must never ring",
-            !shouldStartAlarmVibration(early = true, esAlarma = true, notificationsEnabled = true),
+            "the T-1h alarm of an alarm-mode reminder must ring too",
+            shouldStartAlarmVibration(early = true, esAlarma = true, notificationsEnabled = true),
         )
         assertTrue(
             "a Stage 1 reminder must never ring",
             !shouldStartAlarmVibration(early = false, esAlarma = false, notificationsEnabled = true),
         )
         assertTrue(
+            "a Stage 1 reminder must never ring early either",
+            !shouldStartAlarmVibration(early = true, esAlarma = false, notificationsEnabled = true),
+        )
+        assertTrue(
             "a disabled toggle must suppress the ring",
             !shouldStartAlarmVibration(early = false, esAlarma = true, notificationsEnabled = false),
+        )
+        assertTrue(
+            "a disabled toggle must suppress the early ring too",
+            !shouldStartAlarmVibration(early = true, esAlarma = true, notificationsEnabled = false),
+        )
+    }
+
+    @Test
+    fun earlyAlarmModeHeadsUpIsSkippedOnceTheRingHasSurfaced() {
+        assertTrue(
+            "an alarm-mode early fire whose ring started must not also post the heads-up",
+            !shouldPostEarlyRecordatorioNotification(
+                esAlarma = true,
+                alreadySurfaced = true,
+                notificationsEnabled = true,
+            ),
+        )
+        assertTrue(
+            "the fallback notification already covers an alarm-mode early fire",
+            !shouldPostEarlyRecordatorioNotification(
+                esAlarma = true,
+                alreadySurfaced = true,
+                notificationsEnabled = true,
+            ),
+        )
+        assertTrue(
+            "a non-alarm reminder keeps its early heads-up",
+            shouldPostEarlyRecordatorioNotification(
+                esAlarma = false,
+                alreadySurfaced = false,
+                notificationsEnabled = true,
+            ),
+        )
+        assertTrue(
+            "a disabled toggle suppresses the early heads-up",
+            !shouldPostEarlyRecordatorioNotification(
+                esAlarma = false,
+                alreadySurfaced = false,
+                notificationsEnabled = false,
+            ),
         )
     }
 

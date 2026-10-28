@@ -125,18 +125,24 @@ object ReminderScheduler {
         }
         val earlyAt = fecha - HOUR_MS
         if (earlyAt > now) {
-            // The T-1h heads-up stays a plain alarm in every mode: only the
-            // at-due occurrence is allowed to take over the system alarm clock.
-            setAlarm(
-                context,
-                earlyAt,
-                recordatorioPendingIntent(context, id, texto, early = true, esAlarma = esAlarma),
-            )
+            // An alarm-mode reminder rings the full alarm at T-1h too, so its
+            // early fire needs the same alarm-clock arm as the at-due one: the
+            // foreground-service start exemption comes from that arm.
+            val early =
+                recordatorioPendingIntent(context, id, texto, early = true, esAlarma = esAlarma)
+            if (isAlarmClockSlot(esAlarma, early = true)) {
+                setAlarmClock(context, earlyAt, early, id)
+            } else {
+                setAlarm(context, earlyAt, early)
+            }
         }
     }
 
-    /** Only the at-due occurrence of an alarm-mode reminder is an alarm clock. */
-    internal fun isAlarmClockSlot(esAlarma: Boolean, early: Boolean): Boolean = esAlarma && !early
+    /**
+     * In alarm mode BOTH the T-1h and the at-due occurrence are armed as system
+     * alarm clocks; non-alarm reminders keep plain alarms for both slots.
+     */
+    internal fun isAlarmClockSlot(esAlarma: Boolean, early: Boolean): Boolean = esAlarma
 
     fun cancelRecordatorio(context: Context, id: Long) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -298,11 +304,12 @@ object ReminderScheduler {
     }
 
     /**
-     * Arms the due alarm as an alarm clock, which is what makes MIUI/Doze treat
-     * it like the system clock. Reuses the caller's broadcast PendingIntent so
-     * the request-code namespace, [cancelRecordatorio] and boot re-arming keep
-     * working unchanged. Without the exact-alarm grant it degrades to a plain
-     * alarm instead of throwing.
+     * Arms a reminder alarm as an alarm clock, which is what makes MIUI/Doze
+     * treat it like the system clock and grants the foreground-service start
+     * exemption. Reuses the caller's broadcast PendingIntent so the request-code
+     * namespace, [cancelRecordatorio] and boot re-arming keep working unchanged.
+     * Without the exact-alarm grant it degrades to a plain alarm instead of
+     * throwing.
      */
     private fun setAlarmClock(
         context: Context,

@@ -49,7 +49,12 @@ suspend fun applyNotificationsEnabled(
         ReminderScheduler.scheduleWeeklyReview(context)
     } else {
         tareaDao.getAllOnce().forEach { ReminderScheduler.cancelTaskReminder(context, it.id) }
-        recordatorioDao.getAllOnce().forEach { ReminderScheduler.cancelRecordatorio(context, it.id) }
+        recordatorioDao.getAllOnce().forEach {
+            ReminderScheduler.cancelRecordatorio(context, it.id)
+            // The toggle also means silence now: an alarm already ringing must
+            // not keep the vibrator going after its alarms were cancelled.
+            AlarmVibrationService.stopIfRinging(context, it.id)
+        }
         ReminderScheduler.cancelTaskReminder(context, ReminderScheduler.WEEKLY_REVIEW_ID)
     }
 }

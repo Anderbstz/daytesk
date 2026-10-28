@@ -48,6 +48,11 @@ suspend fun persistRecordatorio(
     // This is NOT part of cancelRecordatorio: that path re-arms on every app
     // start and must leave pending snoozes alone.
     ReminderScheduler.cancelSnooze(context, id)
+    if (recordatorio.id != 0L) {
+        // The text and time the active ring is announcing just changed, so the
+        // old identity's ring must fall silent now instead of at the timeout.
+        AlarmVibrationService.stopIfRinging(context, id)
+    }
     RecordatorioWidgetProvider.refresh(context)
     return id
 }
@@ -60,6 +65,9 @@ suspend fun deleteRecordatorio(
 ) {
     ReminderScheduler.cancelRecordatorio(context, recordatorio.id)
     ReminderScheduler.cancelSnooze(context, recordatorio.id)
+    // Deleting a ringing reminder must silence it immediately: cancelling the
+    // alarms alone leaves the vibrator running until the 2-minute timeout.
+    AlarmVibrationService.stopIfRinging(context, recordatorio.id)
     dao.delete(recordatorio.toEntity())
     RecordatorioWidgetProvider.refresh(context)
 }

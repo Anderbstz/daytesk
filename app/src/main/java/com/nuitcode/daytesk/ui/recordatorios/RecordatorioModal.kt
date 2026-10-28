@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -265,6 +266,17 @@ fun RecordatorioModal(
                 Switch(
                     checked = esAlarma,
                     onCheckedChange = { esAlarma = it },
+                    // Material3's defaults render nearly invisible on this
+                    // palette, so both states are themed explicitly, matching
+                    // the switch in ConfiguracionScreen.
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = DayteskColors.Primary,
+                        checkedBorderColor = DayteskColors.Primary,
+                        uncheckedThumbColor = DayteskColors.TextSecondary,
+                        uncheckedTrackColor = DayteskColors.Surface,
+                        uncheckedBorderColor = DayteskColors.Border,
+                    ),
                 )
             }
 

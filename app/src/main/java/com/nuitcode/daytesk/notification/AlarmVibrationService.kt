@@ -28,7 +28,11 @@ import androidx.core.app.ServiceCompat
  *   - repeats [ALARM_PATTERN] forever (`repeat = 0`);
  *   - arms a 2-minute safety stop that survives the notifications toggle;
  *   - cancels the vibration, the timeout and the notification on dismiss,
- *     snooze, timeout and `onDestroy`.
+ *     snooze, timeout and `onDestroy`;
+ *   - stops early when the reminder is invalidated (deleted, edited,
+ *     notifications turned off, logout or account switch). Those stops are
+ *     id-scoped through [stopIfRinging], so one reminder's invalidation cannot
+ *     silence a different reminder's ring.
  *
  * `START_NOT_STICKY` and no `onTaskRemoved` override: swiping the app away must
  * not silence a ringing alarm.
@@ -36,7 +40,7 @@ import androidx.core.app.ServiceCompat
 class AlarmVibrationService : Service() {
 
     private var vibrator: Vibrator? = null
-    private var currentId: Long = -1L
+    private var currentId: Long = NO_RECORDATORIO_ID
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -47,7 +51,7 @@ class AlarmVibrationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> stopRinging()
+            ACTION_STOP -> if (shouldStop(currentId, intent.recordatorioId())) stopRinging()
             ACTION_START -> startRinging(intent)
             else -> stopSelf()
         }
@@ -55,7 +59,7 @@ class AlarmVibrationService : Service() {
     }
 
     private fun startRinging(intent: Intent) {
-        val id = intent.getLongExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, -1L)
+        val id = intent.recordatorioId()
         if (id < 0L) {
             stopSelf()
             return
@@ -102,10 +106,10 @@ class AlarmVibrationService : Service() {
     private fun stopRinging() {
         vibrator?.cancel()
         vibrator = null
-        if (currentId >= 0L) {
+        if (currentId != NO_RECORDATORIO_ID) {
             ReminderScheduler.cancelRingTimeout(this, currentId)
         }
-        currentId = -1L
+        currentId = NO_RECORDATORIO_ID
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(NotificationHelper.RING_NOTIFICATION_ID)
@@ -121,6 +125,12 @@ class AlarmVibrationService : Service() {
         const val ACTION_START = "com.nuitcode.daytesk.ALARM_VIBRATION_START"
         const val ACTION_STOP = "com.nuitcode.daytesk.ALARM_VIBRATION_STOP"
         private const val DISMISS_REQUEST_CODE = 8001
+
+        /**
+         * Sentinel for "no reminder id". Also the marker of an unconditional
+         * stop: a whole-identity invalidation has no single reminder to name.
+         */
+        internal const val NO_RECORDATORIO_ID = -1L
 
         /** Strong, loopable waveform: silence, triple pulse. */
         internal val ALARM_PATTERN = longArrayOf(0, 700, 300, 700, 300, 1200)
@@ -162,6 +172,62 @@ class AlarmVibrationService : Service() {
             context.stopService(Intent(context, AlarmVibrationService::class.java))
         }
 
+        /**
+         * Silences the ring **only if it belongs to [id]**.
+         *
+         * The identity-invalidating paths (delete, edit, notifications-off) use
+         * this instead of [stop], so invalidating one reminder can never silence
+         * a different reminder that happens to be ringing at the same time. The
+         * service is already running, so [Context.startService] is enough — no
+         * foreground-service start is required.
+         *
+         * A failed start is swallowed: if the service cannot be started there is
+         * no ring to stop, and a delete must never crash for it.
+         */
+        fun stopIfRinging(context: Context, id: Long) {
+            sendStop(context, id)
+        }
+
+        /**
+         * Silences whatever is ringing, without naming a reminder.
+         *
+         * Reserved for paths that discard the whole local identity (logout,
+         * account switch): every reminder on screen belongs to the outgoing
+         * identity, so there is no id to compare against.
+         */
+        fun stopAnyRinging(context: Context) {
+            sendStop(context, NO_RECORDATORIO_ID)
+        }
+
+        private fun sendStop(context: Context, id: Long) {
+            val intent = Intent(context, AlarmVibrationService::class.java).apply {
+                action = ACTION_STOP
+                data = Uri.parse("daytesk://recordatorio/$id/stop")
+                if (id != NO_RECORDATORIO_ID) {
+                    putExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, id)
+                }
+            }
+            runCatching { context.startService(intent) }
+        }
+
+        /**
+         * Whether an [ACTION_STOP] for [incomingId] may silence the ring that
+         * belongs to [currentId].
+         *
+         * - a matching id stops the ring;
+         * - a different id leaves it alone, so one reminder's invalidation
+         *   cannot cut off another reminder that is ringing;
+         * - a missing id stops anyway, because a whole-identity invalidation has
+         *   no id to compare and can never leave a ring behind;
+         * - a stop that arrives while nothing rings is allowed through so the
+         *   service can clean up after itself.
+         */
+        internal fun shouldStop(currentId: Long, incomingId: Long): Boolean {
+            if (currentId == NO_RECORDATORIO_ID) return true
+            if (incomingId == NO_RECORDATORIO_ID) return true
+            return incomingId == currentId
+        }
+
         /** "Descartar" action on the ringing notification. */
         fun dismissPendingIntent(context: Context, id: Long): PendingIntent {
             val intent = Intent(context, AlarmVibrationService::class.java).apply {
@@ -187,3 +253,10 @@ class AlarmVibrationService : Service() {
             }
     }
 }
+
+/** The reminder an incoming command belongs to, or [NO_RECORDATORIO_ID]. */
+private fun Intent.recordatorioId(): Long =
+    getLongExtra(
+        ReminderScheduler.EXTRA_RECORDATORIO_ID,
+        AlarmVibrationService.NO_RECORDATORIO_ID,
+    )

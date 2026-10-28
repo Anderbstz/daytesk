@@ -52,7 +52,9 @@ class ReminderReceiver : BroadcastReceiver() {
      * Recordatorio alarm.
      *
      * **1h-before (`early = true`)**: notify and leave the row alone so the
-     * at-due alarm still fires.
+     * at-due alarm still fires. In alarm mode the ring itself is the heads-up,
+     * so the separate early notification is skipped once the alarm surfaced
+     * (see [shouldPostEarlyRecordatorioNotification]).
      *
      * **At-due (`early = false`)**: rolling the series is what notifies — the
      * roll surfaces every just-due occurrence before removing it. This makes
@@ -87,7 +89,12 @@ class ReminderReceiver : BroadcastReceiver() {
                 val dao = database.recordatorioDao()
                 val recordatorio = dao.getById(recordatorioId) ?: return@launch
                 if (early) {
-                    if (NotificationPreferences.isEnabled(context)) {
+                    if (shouldPostEarlyRecordatorioNotification(
+                            esAlarma = esAlarma || recordatorio.esAlarma,
+                            alreadySurfaced = ringingStarted || fallbackPosted,
+                            notificationsEnabled = NotificationPreferences.isEnabled(context),
+                        )
+                    ) {
                         NotificationHelper.showRecordatorio(
                             context,
                             title.ifBlank { recordatorio.texto },
@@ -129,14 +136,26 @@ class ReminderReceiver : BroadcastReceiver() {
 }
 
 /**
- * Alarm mode applies only to the at-due occurrence and only while the user has
- * notifications enabled. The T-1h heads-up always stays Stage 1.
+ * Alarm mode applies to both the T-1h and the at-due occurrence, and only while
+ * the user has notifications enabled. Both fires ring the full vibration alarm.
  */
 internal fun shouldStartAlarmVibration(
     early: Boolean,
     esAlarma: Boolean,
     notificationsEnabled: Boolean,
-): Boolean = !early && esAlarma && notificationsEnabled
+): Boolean = esAlarma && notificationsEnabled
+
+/**
+ * In alarm mode the ring (or its fallback notification) already surfaces the
+ * reminder, so the early fire must not also post the separate "En 1 hora"
+ * notification. Non-alarm reminders keep their early heads-up unchanged, and a
+ * disabled toggle still suppresses it.
+ */
+internal fun shouldPostEarlyRecordatorioNotification(
+    esAlarma: Boolean,
+    alreadySurfaced: Boolean,
+    notificationsEnabled: Boolean,
+): Boolean = notificationsEnabled && !(esAlarma && alreadySurfaced)
 
 /**
  * Starts the vibration ring; when the platform rejects it (or the device has no

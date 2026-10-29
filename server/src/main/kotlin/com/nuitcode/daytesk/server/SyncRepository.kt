@@ -70,6 +70,26 @@ object SyncRepository {
                 )
                 """.trimIndent(),
             )
+            // Columns added when DayTesk started mirroring LimeKatze items.
+            // They must be idempotent: migrate() runs on every connect.
+            statement.execute(
+                "ALTER TABLE user_recordatorios ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'DAYTESK'",
+            )
+            statement.execute(
+                "ALTER TABLE user_recordatorios ADD COLUMN IF NOT EXISTS remote_key TEXT",
+            )
+            statement.execute(
+                "ALTER TABLE user_recordatorios ADD COLUMN IF NOT EXISTS silenciado INT NOT NULL DEFAULT 0",
+            )
+            statement.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_recordatorios_mute (
+                    user_id BIGINT NOT NULL,
+                    remote_key TEXT NOT NULL,
+                    PRIMARY KEY (user_id, remote_key)
+                )
+                """.trimIndent(),
+            )
         }
     }
 
@@ -126,8 +146,9 @@ object SyncRepository {
             val recordatorios = mutableListOf<SyncRecordatorio>()
             connection.prepareStatement(
                 """
-                SELECT cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at
-                FROM user_recordatorios WHERE user_id = ?
+                SELECT cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at,
+                       origin, remote_key, silenciado
+                FROM user_recordatorios WHERE user_id = ? AND origin = 'DAYTESK'
                 """.trimIndent(),
             ).use { statement ->
                 statement.setLong(1, userId)
@@ -140,11 +161,52 @@ object SyncRepository {
                             repeticion = result.getString("repeticion"),
                             fechaCreacion = result.getLong("fecha_creacion"),
                             updatedAt = result.getLong("updated_at"),
+                            origin = result.getString("origin"),
+                            remoteKey = result.getString("remote_key"),
+                            silenciado = result.getInt("silenciado") != 0,
                         )
                     }
                 }
             }
             return SyncPayload(contextos = contextos, tareas = tareas, recordatorios = recordatorios)
+        }
+    }
+
+    fun mutedKeys(userId: Long): Set<String> {
+        Database.connect().use { connection ->
+            migrate(connection)
+            val keys = mutableSetOf<String>()
+            connection.prepareStatement(
+                "SELECT remote_key FROM user_recordatorios_mute WHERE user_id = ?",
+            ).use { statement ->
+                statement.setLong(1, userId)
+                statement.executeQuery().use { result ->
+                    while (result.next()) keys += result.getString("remote_key")
+                }
+            }
+            return keys
+        }
+    }
+
+    fun setMuted(userId: Long, remoteKey: String, muted: Boolean) {
+        Database.connect().use { connection ->
+            migrate(connection)
+            connection.prepareStatement(
+                "DELETE FROM user_recordatorios_mute WHERE user_id = ? AND remote_key = ?",
+            ).use { statement ->
+                statement.setLong(1, userId)
+                statement.setString(2, remoteKey)
+                statement.executeUpdate()
+            }
+            if (muted) {
+                connection.prepareStatement(
+                    "INSERT INTO user_recordatorios_mute (user_id, remote_key) VALUES (?, ?)",
+                ).use { statement ->
+                    statement.setLong(1, userId)
+                    statement.setString(2, remoteKey)
+                    statement.executeUpdate()
+                }
+            }
         }
     }
 
@@ -157,7 +219,9 @@ object SyncRepository {
                     it.setLong(1, userId)
                     it.executeUpdate()
                 }
-                connection.prepareStatement("DELETE FROM user_recordatorios WHERE user_id = ?").use {
+                connection.prepareStatement(
+                    "DELETE FROM user_recordatorios WHERE user_id = ? AND origin = 'DAYTESK'",
+                ).use {
                     it.setLong(1, userId)
                     it.executeUpdate()
                 }
@@ -209,24 +273,33 @@ object SyncRepository {
                         statement.executeUpdate()
                     }
                 }
-                payload.recordatorios.forEach { item ->
-                    connection.prepareStatement(
-                        """
-                        INSERT INTO user_recordatorios
-                        (user_id, cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """.trimIndent(),
-                    ).use { statement ->
-                        statement.setLong(1, userId)
-                        statement.setString(2, item.cloudKey)
-                        statement.setString(3, item.texto)
-                        statement.setLong(4, item.fecha)
-                        statement.setString(5, item.repeticion)
-                        statement.setLong(6, item.fechaCreacion)
-                        statement.setLong(7, item.updatedAt)
-                        statement.executeUpdate()
+                // Remote rows are owned by LimeKatze: they are never persisted
+                // here, otherwise a PUT from an old client could resurrect or
+                // overwrite them.
+                payload.recordatorios
+                    .filter { it.origin != "LIMEKATZE" }
+                    .forEach { item ->
+                        connection.prepareStatement(
+                            """
+                            INSERT INTO user_recordatorios
+                            (user_id, cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at,
+                             origin, remote_key, silenciado)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """.trimIndent(),
+                        ).use { statement ->
+                            statement.setLong(1, userId)
+                            statement.setString(2, item.cloudKey)
+                            statement.setString(3, item.texto)
+                            statement.setLong(4, item.fecha)
+                            statement.setString(5, item.repeticion)
+                            statement.setLong(6, item.fechaCreacion)
+                            statement.setLong(7, item.updatedAt)
+                            statement.setString(8, item.origin)
+                            statement.setString(9, item.remoteKey)
+                            statement.setInt(10, if (item.silenciado) 1 else 0)
+                            statement.executeUpdate()
+                        }
                     }
-                }
                 connection.commit()
             } catch (failure: Throwable) {
                 connection.rollback()
@@ -280,4 +353,7 @@ data class SyncRecordatorio(
     val repeticion: String = "NINGUNA",
     val fechaCreacion: Long,
     val updatedAt: Long,
+    val origin: String = "DAYTESK",
+    val remoteKey: String? = null,
+    val silenciado: Boolean = false,
 )

@@ -7,6 +7,9 @@ object Env {
     val jwtSecret: String get() = read("JWT_SECRET").ifBlank { "daytesk-dev-secret-change-me" }
     val port: Int get() = read("PORT").toIntOrNull() ?: 8080
     val apiBaseUrl: String get() = read("API_BASE_URL").ifBlank { "http://10.0.2.2:8080" }
+    val limekatzeApiUrl: String get() = read("LIMEKATZE_API_URL").trimEnd('/')
+    val limekatzeServiceToken: String get() = read("LIMEKATZE_SERVICE_TOKEN")
+    val limekatzeDiscordId: String get() = read("LIMEKATZE_DISCORD_ID")
     val usesNeon: Boolean get() = databaseUrl.isNotBlank()
 
     private fun read(name: String): String {

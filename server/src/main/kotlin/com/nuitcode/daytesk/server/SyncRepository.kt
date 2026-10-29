@@ -316,6 +316,9 @@ data class SyncPayload(
     val contextos: List<SyncContexto> = emptyList(),
     val tareas: List<SyncTarea> = emptyList(),
     val recordatorios: List<SyncRecordatorio> = emptyList(),
+    // Null when the remote feed was merged. A short reason when it was not,
+    // so a client or a curl can see why without server logs.
+    val remoteError: String? = null,
 )
 
 @Serializable

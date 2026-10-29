@@ -177,7 +177,9 @@ fun main() {
                             "LimeKatze feed failed; serving local data only",
                             failure,
                         )
-                        local
+                        local.copy(
+                            remoteError = failure.message ?: failure::class.simpleName,
+                        )
                     }
                 } else {
                     local

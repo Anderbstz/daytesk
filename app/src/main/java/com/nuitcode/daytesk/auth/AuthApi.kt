@@ -84,7 +84,10 @@ object AuthApi {
                         .put("fecha", item.fecha)
                         .put("repeticion", item.repeticion)
                         .put("fechaCreacion", item.fechaCreacion)
-                        .put("updatedAt", item.updatedAt),
+                        .put("updatedAt", item.updatedAt)
+                        .put("origin", item.origin)
+                        .put("remoteKey", item.remoteKey ?: JSONObject.NULL)
+                        .put("silenciado", item.silenciado),
                 )
             }
             return JSONObject()
@@ -126,6 +129,9 @@ object AuthApi {
         val repeticion: String,
         val fechaCreacion: Long,
         val updatedAt: Long,
+        val origin: String = "DAYTESK",
+        val remoteKey: String? = null,
+        val silenciado: Boolean = false,
     )
 
     suspend fun login(identifier: String, password: String): Result<LoginResult> {
@@ -163,6 +169,38 @@ object AuthApi {
         }
     }
 
+    /** Deletes a mirrored item at its source. Local rows must not use this. */
+    suspend fun deleteRemoteNotification(token: String, key: String): Result<Unit> {
+        return dispatchNetwork {
+            request(
+                "DELETE",
+                "/limekatze/notifications/${encodePath(key)}",
+                token,
+                requireJson = false,
+            ).map { }
+        }
+    }
+
+    /** Reschedules a mirrored item at its source. */
+    suspend fun rescheduleRemoteNotification(
+        token: String,
+        key: String,
+        fecha: Long,
+    ): Result<Unit> {
+        return dispatchNetwork {
+            request(
+                "PATCH",
+                "/limekatze/notifications/${encodePath(key)}",
+                token,
+                JSONObject().put("fecha", fecha),
+                requireJson = false,
+            ).map { }
+        }
+    }
+
+    private fun encodePath(key: String): String =
+        java.net.URLEncoder.encode(key, "UTF-8").replace("+", "%20")
+
     private fun authCall(path: String, payload: JSONObject): Result<LoginResult> {
         return request("POST", path, token = null, body = payload).mapCatching { body ->
             val json = JSONObject(body)
@@ -180,12 +218,13 @@ object AuthApi {
         path: String,
         token: String?,
         body: JSONObject? = null,
+        requireJson: Boolean = true,
     ): Result<String> {
         var lastError: Throwable? = null
         repeat(4) { attempt ->
             val attemptResult = runCatching { once(method, path, token, body) }
             val text = attemptResult.getOrNull()
-            if (attemptResult.isSuccess && text != null && looksLikeJson(text)) {
+            if (attemptResult.isSuccess && text != null && (!requireJson || looksLikeJson(text))) {
                 return Result.success(text)
             }
             lastError = attemptResult.exceptionOrNull() ?: IllegalStateException(
@@ -197,7 +236,7 @@ object AuthApi {
                 lastError?.message?.contains("503") == true ||
                 lastError?.message?.contains("502") == true ||
                 lastError?.message?.contains("504") == true ||
-                (attemptResult.isSuccess && text != null && !looksLikeJson(text))
+                (requireJson && attemptResult.isSuccess && text != null && !looksLikeJson(text))
             if (!retryable || attempt == 3) {
                 return Result.failure(
                     lastError ?: IllegalStateException("No se pudo conectar al servidor."),
@@ -234,6 +273,8 @@ object AuthApi {
             ?.bufferedReader()
             ?.use { it.readText() }
             .orEmpty()
+        // DELETE and PATCH answer 204 with no body.
+        if (code in 200..299 && text.isBlank()) return ""
         if (!looksLikeJson(text) || code == 502 || code == 503 || code == 504) {
             error("El servidor está despertando. Esperá unos segundos y volvé a entrar.")
         }
@@ -287,6 +328,13 @@ object AuthApi {
                 repeticion = item.optString("repeticion", "NINGUNA"),
                 fechaCreacion = item.optLong("fechaCreacion"),
                 updatedAt = item.optLong("updatedAt"),
+                origin = item.optString("origin", "DAYTESK"),
+                remoteKey = if (item.has("remoteKey") && !item.isNull("remoteKey")) {
+                    item.getString("remoteKey")
+                } else {
+                    null
+                },
+                silenciado = item.optBoolean("silenciado", false),
             )
         }
         return SyncSnapshot(contextos, tareas, recordatorios)

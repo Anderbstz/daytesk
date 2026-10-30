@@ -240,6 +240,11 @@ object ReminderScheduler {
     fun rescheduleRecordatorios(context: Context, recordatorios: List<Recordatorio>) {
         NotificationHelper.createNotificationChannel(context)
         recordatorios.forEach { recordatorio ->
+            if (recordatorio.silenciado) {
+                // Muted mirrors stay in the list but must not ring.
+                cancelRecordatorio(context, recordatorio.id)
+                return@forEach
+            }
             scheduleRecordatorio(
                 context,
                 recordatorio.id,

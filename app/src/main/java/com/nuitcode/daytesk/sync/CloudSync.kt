@@ -195,6 +195,7 @@ class CloudSync(
      * transaction, so the merge cannot observe a concurrent write either.
      */
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {
+        val previousRecordatorioIds = database.recordatorioDao().getAllOnce().map { it.id }
         database.withSyncTransaction {
             val merged = snapshot.mergePreservingLocal(localSnapshot())
 
@@ -251,6 +252,7 @@ class CloudSync(
                 )
             }
             merged.recordatorios.forEach { item ->
+                val isRemote = item.origin == "LIMEKATZE"
                 recordatorioDao.insert(
                     RecordatorioEntity(
                         id = 0,
@@ -261,7 +263,12 @@ class CloudSync(
                         cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
                         updatedAt = item.updatedAt,
                         fechaCreacion = item.fechaCreacion,
-                        esAlarma = preservedAlarmFlags[item.cloudKey] ?: false,
+                        // Mirrored items always alarm: that is the whole point of
+                        // bringing them into DayTesk.
+                        esAlarma = if (isRemote) true else (preservedAlarmFlags[item.cloudKey] ?: false),
+                        origin = item.origin,
+                        remoteKey = item.remoteKey,
+                        silenciado = item.silenciado,
                     ),
                 )
             }
@@ -271,6 +278,10 @@ class CloudSync(
         // it would only show stale text. Runs after the commit so a rolled-back
         // apply leaves pending snoozes untouched (RISK-001).
         ReminderScheduler.cancelAllSnoozes(context)
+        // Alarms keyed by the old ids would keep ringing for rows that no longer
+        // exist (deleted mirrors, completed tasks). Navigation re-registers the
+        // new ids after the state emission.
+        previousRecordatorioIds.forEach { ReminderScheduler.cancelRecordatorio(context, it) }
     }
 
     /** The local store as a sync snapshot, with `cloudKey`s normalized. */
@@ -321,6 +332,9 @@ class CloudSync(
                     repeticion = entity.repeticion,
                     fechaCreacion = entity.fechaCreacion,
                     updatedAt = entity.updatedAt,
+                    origin = entity.origin,
+                    remoteKey = entity.remoteKey,
+                    silenciado = entity.silenciado,
                 )
             },
         )

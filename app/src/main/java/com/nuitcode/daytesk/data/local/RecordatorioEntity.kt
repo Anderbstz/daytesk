@@ -24,6 +24,12 @@ data class RecordatorioEntity(
     val fechaCreacion: Long,
     /** Opt-in vibration-only alarm mode; `0` for every pre-v7 row. */
     val esAlarma: Boolean = false,
+    /** `DAYTESK` for local rows, `LIMEKATZE` for mirrored ones. */
+    val origin: String = "DAYTESK",
+    /** Stable handle in LimeKatze (`task:42` / `reminder:11`), null when local. */
+    val remoteKey: String? = null,
+    /** Local mute: the row stays visible but no alarm is scheduled. */
+    val silenciado: Boolean = false,
 )
 
 /**
@@ -39,6 +45,9 @@ fun RecordatorioEntity.toDomain(): Recordatorio = Recordatorio(
     updatedAt = updatedAt,
     fechaCreacion = fechaCreacion,
     esAlarma = esAlarma,
+    origin = origin,
+    remoteKey = remoteKey,
+    silenciado = silenciado,
 )
 
 /**
@@ -56,4 +65,7 @@ fun Recordatorio.toEntity(): RecordatorioEntity = RecordatorioEntity(
     updatedAt = updatedAt,
     fechaCreacion = fechaCreacion,
     esAlarma = esAlarma,
+    origin = origin,
+    remoteKey = remoteKey,
+    silenciado = silenciado,
 )

@@ -315,8 +315,12 @@ private fun mergeRemoteNotifications(
     muted: Set<String>,
 ): List<SyncRecordatorio> {
     val localKeys = local.map { it.cloudKey }.toSet()
+    val now = System.currentTimeMillis()
     val mapped = remote.mapNotNull { item ->
         val at = runCatching { parseIsoMillis(item.at) }.getOrNull() ?: return@mapNotNull null
+        // Defensive: an old LimeKatze build could still return past items, and
+        // re-inserting them makes the phone notify on every pull.
+        if (at <= now) return@mapNotNull null
         val updated = runCatching { parseIsoMillis(item.updatedAt) }.getOrNull() ?: at
         SyncRecordatorio(
             cloudKey = "limekatze:${item.key}",

@@ -198,6 +198,25 @@ object Migrations {
             }
         }
     }
+
+    /**
+     * **MIGRATION_7_8** — adds the LimeKatze mirror columns. Local rows keep
+     * `origin='DAYTESK'` and a null `remoteKey`; mirrored ones carry the remote
+     * handle and a local mute flag.
+     */
+    val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL("ALTER TABLE `recordatorios` ADD COLUMN `origin` TEXT NOT NULL DEFAULT 'DAYTESK'")
+                db.execSQL("ALTER TABLE `recordatorios` ADD COLUMN `remoteKey` TEXT")
+                db.execSQL("ALTER TABLE `recordatorios` ADD COLUMN `silenciado` INTEGER NOT NULL DEFAULT 0")
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
 }
 
 /**

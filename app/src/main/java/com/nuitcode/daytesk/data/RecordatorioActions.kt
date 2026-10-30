@@ -2,6 +2,8 @@ package com.nuitcode.daytesk.data
 
 import android.content.Context
 import androidx.room.withTransaction
+import com.nuitcode.daytesk.auth.AuthApi
+import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.RecordatorioDao
 import com.nuitcode.daytesk.data.local.RecordatorioEntity
@@ -30,6 +32,18 @@ suspend fun persistRecordatorio(
     recordatorio: Recordatorio,
 ): Long {
     val now = System.currentTimeMillis()
+    // A mirrored item lives in LimeKatze; reschedule it there first so the next
+    // pull does not undo the local edit.
+    if (recordatorio.origin == "LIMEKATZE" && recordatorio.remoteKey != null) {
+        val token = SessionStore(context).token
+        if (token != null) {
+            AuthApi.rescheduleRemoteNotification(
+                token,
+                recordatorio.remoteKey,
+                recordatorio.fecha,
+            ).getOrThrow()
+        }
+    }
     val entity = recordatorio.copy(updatedAt = now).toEntity()
     val id = if (recordatorio.id == 0L) {
         dao.insert(entity)
@@ -63,6 +77,14 @@ suspend fun deleteRecordatorio(
     dao: RecordatorioDao,
     recordatorio: Recordatorio,
 ) {
+    // Deleting a mirror must delete the source, otherwise the next pull
+    // resurrects it. Local rows skip this entirely.
+    if (recordatorio.origin == "LIMEKATZE" && recordatorio.remoteKey != null) {
+        val token = SessionStore(context).token
+        if (token != null) {
+            AuthApi.deleteRemoteNotification(token, recordatorio.remoteKey).getOrThrow()
+        }
+    }
     ReminderScheduler.cancelRecordatorio(context, recordatorio.id)
     ReminderScheduler.cancelSnooze(context, recordatorio.id)
     // Deleting a ringing reminder must silence it immediately: cancelling the

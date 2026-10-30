@@ -27,4 +27,10 @@ data class Recordatorio(
      * enables audio. Defaults to `false` so every existing row stays Stage 1.
      */
     val esAlarma: Boolean = false,
+    /** `DAYTESK` for local rows, `LIMEKATZE` for mirrored ones. */
+    val origin: String = "DAYTESK",
+    /** Stable handle in LimeKatze (`task:42`), null when local. */
+    val remoteKey: String? = null,
+    /** Local mute: the row stays visible but no alarm is scheduled. */
+    val silenciado: Boolean = false,
 )

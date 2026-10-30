@@ -38,8 +38,11 @@ internal fun AuthApi.SyncSnapshot.mergePreservingLocal(
     return copy(
         contextos = contextos + local.contextos.filterNot { it.cloudKey in remoteContextoKeys },
         tareas = tareas + local.tareas.filterNot { it.cloudKey in remoteTareaKeys },
+        // A mirrored row missing from the feed was deleted or completed at the
+        // source, so it must disappear here too. Only DAYTESK rows survive as
+        // local-only; preserving a mirror would resurrect deleted Discord items.
         recordatorios = recordatorios + local.recordatorios.filterNot {
-            it.cloudKey in remoteRecordatorioKeys
+            it.cloudKey in remoteRecordatorioKeys || it.origin == "LIMEKATZE"
         },
     )
 }

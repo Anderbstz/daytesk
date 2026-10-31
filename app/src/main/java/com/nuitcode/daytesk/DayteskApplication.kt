@@ -40,12 +40,14 @@ class DayteskApplication : Application() {
     }
 
     /**
-     * One unique periodic pull, kept across restarts. One hour balances battery
-     * against how stale a mirrored alarm can be; WorkManager enforces a 15-minute
-     * floor and may defer the run in Doze.
+     * One unique periodic pull, kept across restarts. 15 minutes is WorkManager's
+     * floor: fresher mirrored alarms at the cost of more radio wake-ups. On
+     * Render's free tier this also keeps the service awake 24/7, which burns the
+     * workspace's monthly instance hours; use 1 hour (or always-on infra) if that
+     * matters.
      */
     private fun enqueueBackgroundSync() {
-        val request = PeriodicWorkRequestBuilder<SyncWorker>(1, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(15, TimeUnit.MINUTES)
             .setConstraints(
                 Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)

@@ -105,13 +105,18 @@ class ReminderReceiver : BroadcastReceiver() {
                     }
                     return@launch
                 }
+                if (ringingStarted || fallbackPosted) {
+                    // Stamp the row before the sweep runs so the same due event
+                    // cannot notify twice (alarm + in-app roll).
+                    dao.update(recordatorio.copy(notificadaEn = System.currentTimeMillis()))
+                }
                 rollExpiredRecordatorios(
                     context,
                     database,
                     notifyDue = { entity ->
-                        if (entity.id == recordatorioId && (ringingStarted || fallbackPosted)) {
-                            // Already surfaced synchronously above.
-                        } else {
+                        val alreadySurfaced = entity.notificadaEn != null ||
+                            (entity.id == recordatorioId && (ringingStarted || fallbackPosted))
+                        if (!alreadySurfaced) {
                             notifyExpiredRecordatorio(context, entity)
                         }
                     },

@@ -30,6 +30,8 @@ data class RecordatorioEntity(
     val remoteKey: String? = null,
     /** Local mute: the row stays visible but no alarm is scheduled. */
     val silenciado: Boolean = false,
+    /** When the at-due notification was surfaced, so a later sweep cannot repeat it. */
+    val notificadaEn: Long? = null,
 )
 
 /**
@@ -48,6 +50,7 @@ fun RecordatorioEntity.toDomain(): Recordatorio = Recordatorio(
     origin = origin,
     remoteKey = remoteKey,
     silenciado = silenciado,
+    notificadaEn = notificadaEn,
 )
 
 /**
@@ -68,4 +71,5 @@ fun Recordatorio.toEntity(): RecordatorioEntity = RecordatorioEntity(
     origin = origin,
     remoteKey = remoteKey,
     silenciado = silenciado,
+    notificadaEn = notificadaEn,
 )

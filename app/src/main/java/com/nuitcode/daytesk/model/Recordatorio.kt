@@ -33,4 +33,6 @@ data class Recordatorio(
     val remoteKey: String? = null,
     /** Local mute: the row stays visible but no alarm is scheduled. */
     val silenciado: Boolean = false,
+    /** Epoch millis of the at-due notification, null when not surfaced yet. */
+    val notificadaEn: Long? = null,
 )

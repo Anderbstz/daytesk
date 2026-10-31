@@ -44,7 +44,7 @@ suspend fun persistRecordatorio(
             ).getOrThrow()
         }
     }
-    val entity = recordatorio.copy(updatedAt = now).toEntity()
+    val entity = recordatorio.copy(updatedAt = now, notificadaEn = null).toEntity()
     val id = if (recordatorio.id == 0L) {
         dao.insert(entity)
     } else {
@@ -180,7 +180,10 @@ suspend fun rollExpiredRecordatorios(
     database: AppDatabase,
     now: Long = System.currentTimeMillis(),
     nextCloudKey: () -> String = { UUID.randomUUID().toString() },
-    notifyDue: (RecordatorioEntity) -> Unit = { notifyExpiredRecordatorio(context, it) },
+    notifyDue: (RecordatorioEntity) -> Unit = { entity ->
+        // A due row already surfaced by the alarm must not notify again.
+        if (entity.notificadaEn == null) notifyExpiredRecordatorio(context, entity)
+    },
 ) {
     val dao = database.recordatorioDao()
     val rolled = mutableListOf<RolledOccurrence>()
@@ -207,6 +210,10 @@ suspend fun rollExpiredRecordatorios(
                     fechaCreacion = now,
                     // Alarm mode belongs to the reminder, not to one occurrence.
                     esAlarma = entity.esAlarma,
+                    origin = entity.origin,
+                    remoteKey = entity.remoteKey,
+                    silenciado = entity.silenciado,
+                    notificadaEn = null,
                 )
                 rolled += RolledOccurrence(dao.insert(next), next)
             }

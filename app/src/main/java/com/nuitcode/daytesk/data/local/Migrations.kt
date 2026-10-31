@@ -217,6 +217,22 @@ object Migrations {
             }
         }
     }
+
+    /**
+     * **MIGRATION_8_9** — adds `notificadaEn`. The at-due path stamps it so a
+     * later in-app sweep can delete a due row without notifying again.
+     */
+    val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.beginTransaction()
+            try {
+                db.execSQL("ALTER TABLE `recordatorios` ADD COLUMN `notificadaEn` INTEGER")
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+        }
+    }
 }
 
 /**

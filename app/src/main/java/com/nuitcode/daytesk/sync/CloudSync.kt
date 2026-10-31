@@ -9,6 +9,7 @@ import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.data.local.ContextoEntity
 import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.TareaEntity
+import com.nuitcode.daytesk.data.local.toDomain
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
 import com.nuitcode.daytesk.notification.ReminderScheduler
@@ -49,6 +50,19 @@ class CloudSync(
         }
         NextTaskWidgetProvider.refresh(context)
         RecordatorioWidgetProvider.refresh(context)
+    }
+
+    /**
+     * Pull from a background worker and re-arm the alarms.
+     *
+     * The UI path schedules alarms from the state emission, which does not exist
+     * outside the app: without this, a task created in Discord would land in
+     * Room but never ring until the user opened DayTesk.
+     */
+    suspend fun onBackgroundSync() {
+        onStart()
+        val reminders = database.recordatorioDao().getAllOnce().map { it.toDomain() }
+        ReminderScheduler.rescheduleRecordatorios(context, reminders)
     }
 
     /**
@@ -207,6 +221,10 @@ class CloudSync(
                 .associate {
                     it.cloudKey.ifBlank { "local-recordatorio-${it.id}" } to it.esAlarma
                 }
+            val preservedNotifiedFlags = database.recordatorioDao().getAllOnce()
+                .associate {
+                    it.cloudKey.ifBlank { "local-recordatorio-${it.id}" } to it.notificadaEn
+                }
 
             val contextoDao = database.contextoDao()
             val tareaDao = database.tareaDao()
@@ -269,6 +287,7 @@ class CloudSync(
                         origin = item.origin,
                         remoteKey = item.remoteKey,
                         silenciado = item.silenciado,
+                        notificadaEn = if (isRemote) null else preservedNotifiedFlags[item.cloudKey],
                     ),
                 )
             }

@@ -12,8 +12,8 @@ android {
         applicationId = "com.nuitcode.daytesk"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "2.1"
+        versionCode = 16
+        versionName = "2.5"
     }
 
     buildTypes {
@@ -105,6 +105,11 @@ dependencies {
   // JVM Android test support
   testImplementation(libs.androidx.test.core)
   testImplementation(libs.robolectric)
+
+  // Google sign-in
+  implementation(libs.androidx.credentials)
+  implementation(libs.androidx.credentials.play.services)
+  implementation(libs.google.identity)
 
   // Room
   implementation(libs.androidx.room.runtime)

@@ -4,6 +4,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import org.mindrot.jbcrypt.BCrypt
 import java.util.Date
+import java.util.UUID
 
 data class AuthUser(
     val id: Long,
@@ -15,11 +16,12 @@ data class AuthUser(
 object AuthService {
     private const val DEFAULT_EMAIL = "anderbstz@gmail.com"
     private const val DEFAULT_USERNAME = "ander"
-    private const val DEFAULT_PASSWORD = "12345678"
 
     fun seedDefaultUser() {
         Database.connect().use { connection ->
             Database.migrate(connection)
+            val password = Env.seedUserPassword
+            if (password.isBlank()) return
             val exists = connection.prepareStatement(
                 "SELECT id FROM users WHERE email = ? OR username = ?",
             ).use { statement ->
@@ -28,7 +30,7 @@ object AuthService {
                 statement.executeQuery().use { it.next() }
             }
             if (exists) return
-            val hash = BCrypt.hashpw(DEFAULT_PASSWORD, BCrypt.gensalt())
+            val hash = BCrypt.hashpw(password, BCrypt.gensalt())
             connection.prepareStatement(
                 "INSERT INTO users (email, username, display_name, password_hash) VALUES (?, ?, ?, ?)",
             ).use { statement ->
@@ -93,6 +95,64 @@ object AuthService {
             }
         } ?: return null
         return if (BCrypt.checkpw(password, hash)) user else null
+    }
+
+    /**
+     * Resolves a verified Google identity to an account: by Google subject first,
+     * then by email (Google vouches for it, so a password account with that email
+     * is the same person), and otherwise a new account with no usable password.
+     */
+    fun loginWithGoogle(identity: GoogleIdentity): AuthUser {
+        Database.connect().use { connection ->
+            Database.migrate(connection)
+            val bySubject = connection.prepareStatement(
+                "SELECT id FROM users WHERE google_sub = ?",
+            ).use { statement ->
+                statement.setString(1, identity.subject)
+                statement.executeQuery().use { if (it.next()) it.getLong("id") else null }
+            }
+            if (bySubject != null) {
+                return checkNotNull(findById(bySubject))
+            }
+
+            val byEmail = findUser(identity.email)
+            if (byEmail != null) {
+                connection.prepareStatement(
+                    "UPDATE users SET google_sub = ? WHERE id = ?",
+                ).use { statement ->
+                    statement.setString(1, identity.subject)
+                    statement.setLong(2, byEmail.id)
+                    statement.executeUpdate()
+                }
+                return byEmail
+            }
+
+            connection.prepareStatement(
+                """
+                INSERT INTO users (email, username, display_name, password_hash, google_sub)
+                VALUES (?, ?, ?, ?, ?)
+                """.trimIndent(),
+            ).use { statement ->
+                statement.setString(1, identity.email)
+                statement.setString(2, availableUsername(identity.email))
+                statement.setString(3, identity.displayName)
+                // A random hash nobody knows: this account only signs in with Google.
+                statement.setString(4, BCrypt.hashpw(UUID.randomUUID().toString(), BCrypt.gensalt()))
+                statement.setString(5, identity.subject)
+                statement.executeUpdate()
+            }
+        }
+        return checkNotNull(findUser(identity.email))
+    }
+
+    private fun availableUsername(email: String): String {
+        val base = email.substringBefore("@").lowercase()
+            .replace(Regex("[^a-z0-9._-]"), "")
+            .ifBlank { "usuario" }
+            .padEnd(3, '0')
+        return generateSequence(0) { it + 1 }
+            .map { suffix -> if (suffix == 0) base else "$base$suffix" }
+            .first { findUser(it) == null }
     }
 
     fun findById(id: Long): AuthUser? {

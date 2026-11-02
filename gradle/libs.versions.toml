@@ -20,6 +20,8 @@ mlkitTextRecognition = "16.0.1"
 # mlkitSpeechRecognition removed: com.google.mlkit:speech-recognition does not exist in Google's Maven repo.
 # Audio/video transcription now uses the built-in android.speech.SpeechRecognizer (live mic only).
 coroutinesPlayServices = "1.10.2"
+credentials = "1.5.0"
+googleId = "1.1.1"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
@@ -54,6 +56,11 @@ mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version
 # ML Kit Speech Recognition removed: com.google.mlkit:speech-recognition is not in Google's Maven repo.
 # Audio/video transcription uses android.speech.SpeechRecognizer (no extra dependency).
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutinesPlayServices" }
+
+# Google sign-in
+androidx-credentials = { module = "androidx.credentials:credentials", version.ref = "credentials" }
+androidx-credentials-play-services = { module = "androidx.credentials:credentials-play-services-auth", version.ref = "credentials" }
+google-identity = { module = "com.google.android.libraries.identity.googleid:googleid", version.ref = "googleId" }
 
 # Room
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

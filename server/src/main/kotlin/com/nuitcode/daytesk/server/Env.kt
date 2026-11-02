@@ -10,6 +10,16 @@ object Env {
     val limekatzeApiUrl: String get() = read("LIMEKATZE_API_URL").trimEnd('/')
     val limekatzeServiceToken: String get() = read("LIMEKATZE_SERVICE_TOKEN")
     val limekatzeDiscordId: String get() = read("LIMEKATZE_DISCORD_ID")
+
+    /** The only account whose reminders mirror that Discord user's LimeKatze data. */
+    val limekatzeOwnerEmail: String
+        get() = read("LIMEKATZE_OWNER_EMAIL").ifBlank { "anderbstz@gmail.com" }
+
+    /** OAuth 2.0 web client id; blank disables "Continuar con Google". */
+    val googleClientId: String get() = read("GOOGLE_CLIENT_ID")
+
+    /** Password of the seeded account; blank skips the seed. */
+    val seedUserPassword: String get() = read("SEED_USER_PASSWORD")
     val usesNeon: Boolean get() = databaseUrl.isNotBlank()
 
     private fun read(name: String): String {

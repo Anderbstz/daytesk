@@ -31,4 +31,5 @@ dependencies {
     implementation("com.auth0:java-jwt:4.5.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.1")
     implementation("ch.qos.logback:logback-classic:1.6.6")
+    testImplementation("junit:junit:4.13.2")
 }

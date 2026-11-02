@@ -31,7 +31,7 @@ fun main() {
     val hasUrl = !System.getenv("DATABASE_URL").isNullOrBlank()
     println("Daytesk API en http://127.0.0.1:${Env.port}  [$source]")
     println("getenv DATABASE_URL: ${if (hasUrl) "presente" else "ausente"}")
-    println("Usuario default: ander / anderbstz@gmail.com")
+    println("Google: ${if (Env.googleClientId.isBlank()) "no configurado" else "configurado"}")
 
     val limeKatze = if (
         Env.limekatzeApiUrl.isNotBlank() && Env.limekatzeServiceToken.isNotBlank()
@@ -51,6 +51,14 @@ fun main() {
             else -> "configurado"
         },
     )
+
+    // The LimeKatze data belongs to one Discord user, so only that account may
+    // reach it: anyone else who registers gets a plain, empty DayTesk.
+    fun limeKatzeFor(userId: Long): LimeKatzeClient? {
+        val client = limeKatze?.takeIf { it.isConfigured } ?: return null
+        val email = AuthService.findById(userId)?.email ?: return null
+        return client.takeIf { email.equals(Env.limekatzeOwnerEmail, ignoreCase = true) }
+    }
 
     embeddedServer(Netty, port = Env.port, host = "0.0.0.0") {
         monitor.subscribe(ApplicationStopped) { limeKatze?.close() }
@@ -136,6 +144,37 @@ fun main() {
                     },
                 )
             }
+            get("/auth/config") {
+                call.respond(AuthConfigBody(googleClientId = Env.googleClientId))
+            }
+            post("/auth/google") {
+                val clientId = Env.googleClientId
+                if (clientId.isBlank()) {
+                    call.respond(
+                        HttpStatusCode.ServiceUnavailable,
+                        ErrorBody("El login con Google no está configurado."),
+                    )
+                    return@post
+                }
+                val body = call.receive<GoogleLoginRequest>()
+                val identity = GoogleTokenVerifier.verify(body.idToken, clientId)
+                if (identity == null) {
+                    call.respond(HttpStatusCode.Unauthorized, ErrorBody("No se pudo validar la cuenta de Google."))
+                    return@post
+                }
+                val user = AuthService.loginWithGoogle(identity)
+                call.respond(
+                    LoginResponse(
+                        token = AuthService.issueToken(user),
+                        user = UserBody(
+                            id = user.id,
+                            email = user.email,
+                            username = user.username,
+                            displayName = user.displayName,
+                        ),
+                    ),
+                )
+            }
             get("/auth/me") {
                 val header = call.request.headers[HttpHeaders.Authorization].orEmpty()
                 val token = header.removePrefix("Bearer ").trim()
@@ -161,8 +200,8 @@ fun main() {
                     return@get
                 }
                 val local = SyncRepository.load(userId)
-                val client = limeKatze
-                val merged = if (client != null && client.isConfigured) {
+                val client = limeKatzeFor(userId)
+                val merged = if (client != null) {
                     try {
                         val remote = client.listNotifications(userId)
                         local.copy(
@@ -203,8 +242,8 @@ fun main() {
                     call.respond(HttpStatusCode.Unauthorized, ErrorBody("Sesión inválida."))
                     return@patch
                 }
-                val client = limeKatze
-                if (client == null || !client.isConfigured) {
+                val client = limeKatzeFor(userId)
+                if (client == null) {
                     call.respond(HttpStatusCode.ServiceUnavailable, ErrorBody("LimeKatze no está configurado."))
                     return@patch
                 }
@@ -223,8 +262,8 @@ fun main() {
                     call.respond(HttpStatusCode.Unauthorized, ErrorBody("Sesión inválida."))
                     return@delete
                 }
-                val client = limeKatze
-                if (client == null || !client.isConfigured) {
+                val client = limeKatzeFor(userId)
+                if (client == null) {
                     call.respond(HttpStatusCode.ServiceUnavailable, ErrorBody("LimeKatze no está configurado."))
                     return@delete
                 }
@@ -275,6 +314,12 @@ data class LoginRequest(
         ?: email?.ifBlank { null }
         ?: username.orEmpty()
 }
+
+@Serializable
+data class GoogleLoginRequest(val idToken: String = "")
+
+@Serializable
+data class AuthConfigBody(val googleClientId: String)
 
 @Serializable
 data class LoginResponse(

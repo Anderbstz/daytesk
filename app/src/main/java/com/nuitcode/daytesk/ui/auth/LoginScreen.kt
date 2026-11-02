@@ -19,6 +19,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -39,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.nuitcode.daytesk.R
 import com.nuitcode.daytesk.auth.AccountActions
 import com.nuitcode.daytesk.auth.AuthApi
+import com.nuitcode.daytesk.auth.GoogleSignIn
 import com.nuitcode.daytesk.auth.SessionStore
 import com.nuitcode.daytesk.data.local.AppDatabase
 import com.nuitcode.daytesk.theme.DayteskColors
@@ -213,6 +215,31 @@ fun LoginScreen(
                 else -> "Entrar"
             }
             Text(label, color = androidx.compose.ui.graphics.Color.White)
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        OutlinedButton(
+            onClick = {
+                if (loading) return@OutlinedButton
+                loading = true
+                error = null
+                scope.launch {
+                    val result = GoogleSignIn.signIn(context)
+                    loading = false
+                    result?.onSuccess { session ->
+                        sessionStore.save(session.token, session.displayName, session.email)
+                        onLoggedIn()
+                    }?.onFailure { failure ->
+                        error = failure.message ?: "No se pudo continuar."
+                    }
+                }
+            },
+            enabled = !loading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(50),
+        ) {
+            Text("Continuar con Google", color = DayteskColors.Primary)
         }
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(

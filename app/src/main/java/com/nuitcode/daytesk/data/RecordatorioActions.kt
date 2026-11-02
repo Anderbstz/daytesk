@@ -94,6 +94,10 @@ suspend fun deleteRecordatorio(
     RecordatorioWidgetProvider.refresh(context)
 }
 
+/** Rows with the same identity are copies of one reminder, whatever their `cloudKey`. */
+internal fun RecordatorioEntity.occurrenceIdentity(): Triple<String, Long, String> =
+    Triple(texto, fecha, repeticion)
+
 /** A row inserted by [rollExpiredRecordatorios], paired with its new id. */
 private data class RolledOccurrence(val id: Long, val entity: RecordatorioEntity)
 
@@ -110,8 +114,11 @@ private data class RolledOccurrence(val id: Long, val entity: RecordatorioEntity
  */
 internal fun notifyExpiredRecordatorio(context: Context, entity: RecordatorioEntity): Boolean {
     if (!NotificationPreferences.isEnabled(context)) return false
-    if (entity.esAlarma && AlarmVibrationService.start(context, entity.id, entity.texto)) {
-        return true
+    // A muted mirror has no alarm armed; expiring must not ring it either.
+    if (entity.silenciado) return false
+    if (entity.esAlarma) {
+        if (AlarmVibrationService.wasJustAnswered(entity.texto)) return true
+        if (AlarmVibrationService.start(context, entity.id, entity.texto)) return true
     }
     // Non-alarm reminders keep Stage 1; alarm-mode reminders fall back to it
     // when the device cannot vibrate or the service start is rejected.
@@ -143,6 +150,14 @@ internal fun notifyExpiredRecordatorio(context: Context, entity: RecordatorioEnt
  * insert a next occurrence, producing a duplicate series. Because the read now
  * happens inside the transaction, the second writer observes the committed
  * state and finds nothing left to roll — a second pass is a no-op.
+ *
+ * ## Keeping the server in step
+ *
+ * The server still holds the expired row until the next push. A pull before that
+ * push brought it back, it rolled again under a new `cloudKey`, and the series
+ * gained a copy each time. A roll therefore flags a pending push, which
+ * [com.nuitcode.daytesk.sync.CloudSync] always sends before it pulls, and never
+ * inserts an occurrence that already exists.
  *
  * ## Future advancement
  *
@@ -190,7 +205,9 @@ suspend fun rollExpiredRecordatorios(
     val expired = mutableListOf<RecordatorioEntity>()
 
     database.withTransaction {
-        dao.getAllOnce().forEach { entity ->
+        val rows = dao.getAllOnce()
+        val occurrences = rows.map { it.occurrenceIdentity() }.toMutableSet()
+        rows.forEach { entity ->
             if (entity.fecha > now) return@forEach
             expired += entity
             val repeticion = runCatching { Repeticion.valueOf(entity.repeticion) }
@@ -215,14 +232,18 @@ suspend fun rollExpiredRecordatorios(
                     silenciado = entity.silenciado,
                     notificadaEn = null,
                 )
-                rolled += RolledOccurrence(dao.insert(next), next)
+                if (occurrences.add(next.occurrenceIdentity())) {
+                    rolled += RolledOccurrence(dao.insert(next), next)
+                }
             }
             dao.delete(entity)
         }
     }
+    if (expired.isNotEmpty()) SessionStore(context).hasPendingPush = true
 
-    // Post-commit side effects: the database is authoritative by now.
-    expired.forEach { notifyDue(it) }
+    // Post-commit side effects: the database is authoritative by now. Copies of
+    // one occurrence are one thing to tell the user.
+    expired.distinctBy { it.occurrenceIdentity() }.forEach { notifyDue(it) }
     rolled.forEach { occurrence ->
         ReminderScheduler.scheduleRecordatorio(
             context,

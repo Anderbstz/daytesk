@@ -10,8 +10,10 @@ import com.nuitcode.daytesk.data.local.ContextoEntity
 import com.nuitcode.daytesk.data.local.RecordatorioEntity
 import com.nuitcode.daytesk.data.local.TareaEntity
 import com.nuitcode.daytesk.data.local.toDomain
+import com.nuitcode.daytesk.data.rollExpiredRecordatorios
 import com.nuitcode.daytesk.model.Contexto
 import com.nuitcode.daytesk.model.Repeticion
+import com.nuitcode.daytesk.notification.AlarmVibrationService
 import com.nuitcode.daytesk.notification.ReminderScheduler
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
 import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
@@ -32,8 +34,6 @@ class CloudSync(
     private val sessionStore: SessionStore,
     private val transport: SyncTransport = HttpSyncTransport,
 ) {
-    private val mutex = Mutex()
-
     suspend fun onStart() {
         val token = sessionStore.token ?: return
         mutex.withLock {
@@ -57,10 +57,17 @@ class CloudSync(
      *
      * The UI path schedules alarms from the state emission, which does not exist
      * outside the app: without this, a task created in Discord would land in
-     * Room but never ring until the user opened DayTesk.
+     * Room but never ring until the user opened DayTesk. The roll surfaces any
+     * occurrence whose alarm was late, the same way the in-app sweep does.
      */
     suspend fun onBackgroundSync() {
         onStart()
+        rollExpiredRecordatorios(context, database)
+        // Without this the server keeps the expired rows, the next pull returns
+        // them and they ring again. A failure stays flagged for the next run.
+        if (sessionStore.hasPendingPush) pushNow()
+        val tareas = database.tareaDao().getAllOnce().map { it.toDomain() }
+        ReminderScheduler.reschedulePending(context, tareas)
         val reminders = database.recordatorioDao().getAllOnce().map { it.toDomain() }
         ReminderScheduler.rescheduleRecordatorios(context, reminders)
     }
@@ -93,6 +100,12 @@ class CloudSync(
     }
 
     companion object {
+        /**
+         * Shared by every instance: the UI and the background worker each build
+         * their own [CloudSync], and two concurrent applies must not interleave.
+         */
+        private val mutex = Mutex()
+
         private var debounceJob: Job? = null
 
         /**
@@ -146,7 +159,13 @@ class CloudSync(
 
         if (wipe) {
             // Explicit account switch: the user chose the new account, so local
-            // user content is intentionally discarded.
+            // user content is intentionally discarded, along with its alarms.
+            database.tareaDao().getAllOnce().forEach {
+                ReminderScheduler.cancelTaskReminder(context, it.id)
+            }
+            database.recordatorioDao().getAllOnce().forEach {
+                ReminderScheduler.cancelRecordatorio(context, it.id)
+            }
             database.tareaDao().deleteAll()
             database.recordatorioDao().deleteAll()
             // The local rows just disappeared, so any snooze armed against
@@ -177,6 +196,11 @@ class CloudSync(
             // The remote holds no user content, so any local rows are the only
             // copy that exists. Wiping them here is exactly how a widget-captured
             // recordatorio used to be destroyed; push local instead (RESIL-004).
+            // Mirrors still reconcile: a healthy, empty feed means they are gone.
+            val hasMirrors = database.recordatorioDao().getAllOnce().any { it.origin == "LIMEKATZE" }
+            if (remote.remoteError == null && hasMirrors) {
+                applyLocked(remote)
+            }
             ensureDefaultContextos()
             pushLocked(token)
             return
@@ -199,38 +223,37 @@ class CloudSync(
         ContextoSeed.entries.forEach { seed -> dao.insert(seed.toEntity()) }
     }
 
+    /** Rows a pull removed, so their alarms can be dropped after the commit. */
+    private class RemovedRows(val tareaIds: List<Long>, val recordatorioIds: List<Long>)
+
     /**
-     * Replaces the local store with the remote snapshot, keeping any row that
-     * exists only locally (see [mergePreservingLocal]).
+     * Reconciles the local store with the remote snapshot by `cloudKey`, keeping
+     * any row that exists only locally (see [mergePreservingLocal]).
      *
-     * The whole wipe + re-insert runs inside one [withSyncTransaction], so a
-     * crash or DB error mid-pull can never leave the local store empty or
-     * half-applied (RESIL-002). The local snapshot is read inside the same
-     * transaction, so the merge cannot observe a concurrent write either.
+     * ## Why rows are updated instead of replaced
+     *
+     * Alarms and snoozes are keyed by row id. Wiping and re-inserting gave every
+     * row a new id on each pull, which left armed alarms pointing at rows that
+     * no longer existed: they fired, found nothing and stayed mute. An unchanged
+     * row now keeps its id, so its alarm stays valid across any number of pulls.
+     *
+     * Everything runs inside one [withSyncTransaction], so a crash or DB error
+     * mid-pull can never leave the local store half-applied (RESIL-002). The
+     * local snapshot is read inside the same transaction, so the merge cannot
+     * observe a concurrent write either.
      */
     private suspend fun applyLocked(snapshot: AuthApi.SyncSnapshot) {
-        val previousRecordatorioIds = database.recordatorioDao().getAllOnce().map { it.id }
-        database.withSyncTransaction {
-            val merged = snapshot.mergePreservingLocal(localSnapshot())
-
-            // The server contract has no `esAlarma` field, so the wipe below
-            // would silently reset the user's alarm mode on every pull. Capture
-            // the flags from the local snapshot BEFORE deleting and re-apply
-            // them by cloudKey on insert.
-            val preservedAlarmFlags = database.recordatorioDao().getAllOnce()
-                .associate {
-                    it.cloudKey.ifBlank { "local-recordatorio-${it.id}" } to it.esAlarma
-                }
-            val preservedNotifiedFlags = database.recordatorioDao().getAllOnce()
-                .associate {
-                    it.cloudKey.ifBlank { "local-recordatorio-${it.id}" } to it.notificadaEn
-                }
-
+        val removed = database.withSyncTransaction {
+            // Keys are the identity below, so none may be blank from here on.
+            persistMissingCloudKeys()
             val contextoDao = database.contextoDao()
             val tareaDao = database.tareaDao()
             val recordatorioDao = database.recordatorioDao()
-            tareaDao.deleteAll()
-            recordatorioDao.deleteAll()
+            val localTareas = tareaDao.getAllOnce().associateBy { it.cloudKey }
+            val localRecordatorios = recordatorioDao.getAllOnce().associateBy { it.cloudKey }
+            val reconciled = snapshot.mergePreservingLocal(localSnapshot())
+                .withoutMirrorsArrivingExpired(localRecordatorios.keys, System.currentTimeMillis())
+            val merged = reconciled.withoutRecordatorioCopies(localRecordatorios.keys)
             contextoDao.deleteAll()
             val keyToId = mutableMapOf<String, Long>()
             merged.contextos.sortedBy { it.orden }.forEach { item ->
@@ -250,57 +273,73 @@ class CloudSync(
             }
             val fallbackId = keyToId.values.firstOrNull() ?: Contexto.FALLBACK_ID
             merged.tareas.forEach { item ->
-                tareaDao.insertTarea(
-                    TareaEntity(
-                        id = 0,
-                        titulo = item.titulo,
-                        descripcion = item.descripcion,
-                        prioridad = item.prioridad,
-                        contextoId = keyToId[item.contextoKey] ?: fallbackId,
-                        estado = item.estado,
-                        fechaCreacion = item.fechaCreacion,
-                        fechaVencimiento = item.fechaVencimiento,
-                        fechaCompletada = item.fechaCompletada,
-                        orden = item.orden,
-                        repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
-                            .getOrDefault(Repeticion.NINGUNA).name,
-                        cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                        updatedAt = item.updatedAt,
-                    ),
+                val existing = localTareas[item.cloudKey]
+                val entity = TareaEntity(
+                    id = existing?.id ?: 0,
+                    titulo = item.titulo,
+                    descripcion = item.descripcion,
+                    prioridad = item.prioridad,
+                    contextoId = keyToId[item.contextoKey] ?: fallbackId,
+                    estado = item.estado,
+                    fechaCreacion = item.fechaCreacion,
+                    fechaVencimiento = item.fechaVencimiento,
+                    fechaCompletada = item.fechaCompletada,
+                    orden = item.orden,
+                    repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
+                        .getOrDefault(Repeticion.NINGUNA).name,
+                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                    updatedAt = item.updatedAt,
                 )
+                if (existing == null) tareaDao.insertTarea(entity) else tareaDao.updateTarea(entity)
             }
             merged.recordatorios.forEach { item ->
+                val existing = localRecordatorios[item.cloudKey]
                 val isRemote = item.origin == "LIMEKATZE"
-                recordatorioDao.insert(
-                    RecordatorioEntity(
-                        id = 0,
-                        texto = item.texto,
-                        fecha = item.fecha,
-                        repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
-                            .getOrDefault(Repeticion.NINGUNA).name,
-                        cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
-                        updatedAt = item.updatedAt,
-                        fechaCreacion = item.fechaCreacion,
-                        // Mirrored items always alarm: that is the whole point of
-                        // bringing them into DayTesk.
-                        esAlarma = if (isRemote) true else (preservedAlarmFlags[item.cloudKey] ?: false),
-                        origin = item.origin,
-                        remoteKey = item.remoteKey,
-                        silenciado = item.silenciado,
-                        notificadaEn = if (isRemote) null else preservedNotifiedFlags[item.cloudKey],
-                    ),
+                val entity = RecordatorioEntity(
+                    id = existing?.id ?: 0,
+                    texto = item.texto,
+                    fecha = item.fecha,
+                    repeticion = runCatching { Repeticion.valueOf(item.repeticion) }
+                        .getOrDefault(Repeticion.NINGUNA).name,
+                    cloudKey = item.cloudKey.ifBlank { UUID.randomUUID().toString() },
+                    updatedAt = item.updatedAt,
+                    fechaCreacion = item.fechaCreacion,
+                    // The server contract has no `esAlarma` field, so the local
+                    // flag is the only copy. Mirrored items always alarm: that
+                    // is the whole point of bringing them into DayTesk.
+                    esAlarma = isRemote || existing?.esAlarma == true,
+                    origin = item.origin,
+                    remoteKey = item.remoteKey,
+                    silenciado = item.silenciado,
+                    // A mirror moved at the source is a new occurrence to notify.
+                    notificadaEn = existing?.notificadaEn
+                        ?.takeIf { !isRemote || existing?.fecha == item.fecha },
                 )
+                if (existing == null) recordatorioDao.insert(entity) else recordatorioDao.update(entity)
             }
+
+            val mergedTareaKeys = merged.tareas.map { it.cloudKey }.toSet()
+            val mergedRecordatorioKeys = merged.recordatorios.map { it.cloudKey }.toSet()
+            val removedTareas = localTareas.filterKeys { it !in mergedTareaKeys }.values
+            val removedRecordatorios =
+                localRecordatorios.filterKeys { it !in mergedRecordatorioKeys }.values
+            removedTareas.forEach { tareaDao.deleteTarea(it) }
+            removedRecordatorios.forEach { recordatorioDao.delete(it) }
+            // The server may still hold what was just collapsed.
+            if (reconciled.recordatorios.size > merged.recordatorios.size) {
+                sessionStore.hasPendingPush = true
+            }
+            RemovedRows(removedTareas.map { it.id }, removedRecordatorios.map { it.id })
         }
-        // Every recordatorio now has a fresh id, so a snooze armed against the
-        // replaced local rows can never fire against a valid reminder again;
-        // it would only show stale text. Runs after the commit so a rolled-back
-        // apply leaves pending snoozes untouched (RISK-001).
-        ReminderScheduler.cancelAllSnoozes(context)
-        // Alarms keyed by the old ids would keep ringing for rows that no longer
-        // exist (deleted mirrors, completed tasks). Navigation re-registers the
-        // new ids after the state emission.
-        previousRecordatorioIds.forEach { ReminderScheduler.cancelRecordatorio(context, it) }
+        // After the commit, so a rolled-back apply leaves alarms untouched. Only
+        // rows that really disappeared lose theirs: pending snoozes of surviving
+        // rows, and of rows already rolled by their at-due alarm, keep working.
+        removed.tareaIds.forEach { ReminderScheduler.cancelTaskReminder(context, it) }
+        removed.recordatorioIds.forEach { id ->
+            ReminderScheduler.cancelRecordatorio(context, id)
+            ReminderScheduler.cancelSnooze(context, id)
+            AlarmVibrationService.stopIfRinging(context, id)
+        }
     }
 
     /** The local store as a sync snapshot, with `cloudKey`s normalized. */
@@ -354,7 +393,7 @@ class CloudSync(
                     origin = entity.origin,
                     remoteKey = entity.remoteKey,
                     silenciado = entity.silenciado,
-                )
+                ).withMirrorOriginRestored()
             },
         )
     }

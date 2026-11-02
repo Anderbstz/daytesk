@@ -271,6 +271,23 @@ class RecordatorioActionsTest {
         )
     }
 
+    @Test
+    fun notifyExpiredRecordatorio_staysQuietForAMutedMirror() {
+        val entity = RecordatorioEntity(
+            id = 1L,
+            texto = "muted",
+            fecha = 1L,
+            updatedAt = 1L,
+            fechaCreacion = 1L,
+            silenciado = true,
+        )
+
+        assertFalse(
+            "a muted mirror must not ring when it expires",
+            notifyExpiredRecordatorio(context, entity),
+        )
+    }
+
     /**
      * RELI-003: a dormant daily reminder must not roll to a past date, which
      * would leave the series stalled (the scheduler only registers future

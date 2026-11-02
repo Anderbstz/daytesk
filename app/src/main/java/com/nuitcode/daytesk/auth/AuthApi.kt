@@ -40,6 +40,8 @@ object AuthApi {
         val contextos: List<SyncContextoDto>,
         val tareas: List<SyncTareaDto>,
         val recordatorios: List<SyncRecordatorioDto>,
+        /** Set when the server could not read LimeKatze: mirrors may be missing. */
+        val remoteError: String? = null,
     ) {
         fun isEmpty(): Boolean = contextos.isEmpty() && tareas.isEmpty() && recordatorios.isEmpty()
 
@@ -132,7 +134,23 @@ object AuthApi {
         val origin: String = "DAYTESK",
         val remoteKey: String? = null,
         val silenciado: Boolean = false,
-    )
+    ) {
+        /**
+         * Old builds pushed mirrors without their origin, so the server stored
+         * them as plain reminders: stale, without alarm mode, and hiding the live
+         * item. The namespaced key still tells what they really are.
+         */
+        fun withMirrorOriginRestored(): SyncRecordatorioDto =
+            if (cloudKey.startsWith(MIRROR_KEY_PREFIX) && origin != "LIMEKATZE") {
+                copy(origin = "LIMEKATZE", remoteKey = remoteKey ?: cloudKey.removePrefix(MIRROR_KEY_PREFIX))
+            } else {
+                this
+            }
+
+        private companion object {
+            const val MIRROR_KEY_PREFIX = "limekatze:"
+        }
+    }
 
     suspend fun login(identifier: String, password: String): Result<LoginResult> {
         val payload = JSONObject()
@@ -153,6 +171,24 @@ object AuthApi {
             .put("password", password)
             .put("displayName", displayName.trim().ifBlank { username.trim() })
         return dispatchNetwork { authCall("/auth/register", payload) }
+    }
+
+    /** Exchanges a Google ID token for a Daytesk session. */
+    suspend fun loginWithGoogle(idToken: String): Result<LoginResult> {
+        val payload = JSONObject().put("idToken", idToken)
+        return dispatchNetwork { authCall("/auth/google", payload) }
+    }
+
+    /**
+     * The OAuth web client id lives only in the server environment, so setting
+     * or rotating it never requires a new APK. Blank when it is not configured.
+     */
+    suspend fun googleClientId(): Result<String> {
+        return dispatchNetwork {
+            request("GET", "/auth/config", token = null).mapCatching { body ->
+                JSONObject(body).optString("googleClientId")
+            }
+        }
     }
 
     suspend fun pullSync(token: String): Result<SyncSnapshot> {
@@ -335,9 +371,14 @@ object AuthApi {
                     null
                 },
                 silenciado = item.optBoolean("silenciado", false),
-            )
+            ).withMirrorOriginRestored()
         }
-        return SyncSnapshot(contextos, tareas, recordatorios)
+        val remoteError = if (json.has("remoteError") && !json.isNull("remoteError")) {
+            json.getString("remoteError")
+        } else {
+            null
+        }
+        return SyncSnapshot(contextos, tareas, recordatorios, remoteError)
     }
 
     private fun JSONArray?.orEmpty(): JSONArray = this ?: JSONArray()

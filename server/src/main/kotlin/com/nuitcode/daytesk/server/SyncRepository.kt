@@ -148,7 +148,8 @@ object SyncRepository {
                 """
                 SELECT cloud_key, texto, fecha, repeticion, fecha_creacion, updated_at,
                        origin, remote_key, silenciado
-                FROM user_recordatorios WHERE user_id = ? AND origin = 'DAYTESK'
+                FROM user_recordatorios
+                WHERE user_id = ? AND origin = 'DAYTESK' AND cloud_key NOT LIKE 'limekatze:%'
                 """.trimIndent(),
             ).use { statement ->
                 statement.setLong(1, userId)
@@ -275,9 +276,10 @@ object SyncRepository {
                 }
                 // Remote rows are owned by LimeKatze: they are never persisted
                 // here, otherwise a PUT from an old client could resurrect or
-                // overwrite them.
+                // overwrite them. Old clients lost the origin of some rows but not
+                // their namespaced key, and a stored copy would shadow the live one.
                 payload.recordatorios
-                    .filter { it.origin != "LIMEKATZE" }
+                    .filter { it.origin != "LIMEKATZE" && !it.cloudKey.startsWith("limekatze:") }
                     .forEach { item ->
                         connection.prepareStatement(
                             """

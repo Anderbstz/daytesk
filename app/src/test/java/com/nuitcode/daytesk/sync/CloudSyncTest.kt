@@ -271,28 +271,269 @@ class CloudSyncTest {
         assertTrue("the outgoing account's alarm must be cancelled", snoozeAlarms().isEmpty())
     }
 
+    private fun remoteRecordatorio(
+        cloudKey: String,
+        fecha: Long = System.currentTimeMillis() + 3_600_000L,
+        origin: String = "DAYTESK",
+    ) = AuthApi.SyncRecordatorioDto(
+        cloudKey = cloudKey,
+        texto = "from the server",
+        fecha = fecha,
+        repeticion = "NINGUNA",
+        fechaCreacion = 1L,
+        updatedAt = 1L,
+        origin = origin,
+        remoteKey = if (origin == "LIMEKATZE") "task:1" else null,
+    )
+
+    private fun remoteTarea(cloudKey: String) = AuthApi.SyncTareaDto(
+        cloudKey = cloudKey,
+        titulo = "from the server",
+        descripcion = "",
+        prioridad = "MEDIA",
+        contextoKey = "missing",
+        estado = "PENDIENTE",
+        fechaCreacion = 1L,
+        fechaVencimiento = System.currentTimeMillis() + 3_600_000L,
+        fechaCompletada = null,
+        orden = 0,
+        repeticion = "NINGUNA",
+        updatedAt = 1L,
+    )
+
+    private suspend fun insertMirror(cloudKey: String, fecha: Long): Long =
+        db.recordatorioDao().insert(
+            RecordatorioEntity(
+                texto = "mirror",
+                fecha = fecha,
+                repeticion = "NINGUNA",
+                cloudKey = cloudKey,
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+                esAlarma = true,
+                origin = "LIMEKATZE",
+                remoteKey = "task:1",
+            ),
+        )
+
+    private fun otherUserContent() = AuthApi.SyncSnapshot(
+        contextos = emptyList(),
+        tareas = emptyList(),
+        recordatorios = listOf(remoteRecordatorio("remote-1")),
+    )
+
     @Test
-    fun onStart_whenAPullReplacesLocalRows_cancelsPendingSnoozes() = runTest {
-        ReminderScheduler.scheduleSnooze(context, id = 72L, texto = "Stale reminder")
+    fun aPull_keepsPendingSnoozesAlive() = runTest {
+        ReminderScheduler.scheduleSnooze(context, id = 72L, texto = "Snoozed")
+        val transport = FakeTransport(Result.success(otherUserContent()))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertEquals("a pull must not forget a snooze", 1, SnoozeStore.all(context).size)
+        assertEquals("a pull must not cancel a snooze alarm", 1, snoozeAlarms().size)
+    }
+
+    // ── Armed alarms are keyed by row id, so a pull must never change it ──────
+
+    @Test
+    fun repeatedPulls_keepTheRowIdsOfRecordatoriosAndTareas() = runTest {
+        val remote = AuthApi.SyncSnapshot(
+            contextos = emptyList(),
+            tareas = listOf(remoteTarea("tarea-1")),
+            recordatorios = listOf(remoteRecordatorio("rec-1")),
+        )
+        val sync = CloudSync(context, db, sessionStore, FakeTransport(Result.success(remote)))
+
+        sync.onStart()
+        val tareaId = db.tareaDao().getAllOnce().single().id
+        val recordatorioId = db.recordatorioDao().getAllOnce().single().id
+        sync.onStart()
+
+        assertEquals(tareaId, db.tareaDao().getAllOnce().single().id)
+        assertEquals(recordatorioId, db.recordatorioDao().getAllOnce().single().id)
+    }
+
+    @Test
+    fun aRowGoneFromTheFeed_losesItsAlarm() = runTest {
+        val id = insertMirror("limekatze:task:1", System.currentTimeMillis() + 3_600_000L)
+        ReminderScheduler.scheduleRecordatorio(
+            context,
+            id,
+            "mirror",
+            System.currentTimeMillis() + 3_600_000L,
+            esAlarma = true,
+        )
+        val transport = FakeTransport(Result.success(otherUserContent()))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertNull(db.recordatorioDao().getById(id))
+        val alarms = shadowOf(context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).scheduledAlarms
+        assertTrue(
+            "the removed row's alarm must be cancelled",
+            alarms.none { shadowOf(it.operation).savedIntent.data.toString().contains("recordatorio/$id/") },
+        )
+    }
+
+    // ── A LimeKatze failure or a late alarm must not lose a mirror ───────────
+
+    @Test
+    fun aFailedFeed_keepsTheMirrors() = runTest {
+        val id = insertMirror("limekatze:task:1", System.currentTimeMillis() + 3_600_000L)
+        val transport = FakeTransport(
+            Result.success(otherUserContent().copy(remoteError = "LimeKatze is asleep")),
+        )
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertNotNull("a failed feed says nothing about the mirror", db.recordatorioDao().getById(id))
+    }
+
+    @Test
+    fun aHealthyEmptyFeed_removesTheMirrorsEvenWithNoOtherContent() = runTest {
+        val id = insertMirror("limekatze:task:1", System.currentTimeMillis() + 3_600_000L)
+        val transport = FakeTransport(Result.success(emptySnapshot()))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertNull(db.recordatorioDao().getById(id))
+    }
+
+    @Test
+    fun aMirrorPastItsTime_survivesThePullSoTheRollCanSurfaceIt() = runTest {
+        val id = insertMirror("limekatze:task:1", System.currentTimeMillis() - 1_000L)
+        val transport = FakeTransport(Result.success(otherUserContent()))
+
+        CloudSync(context, db, sessionStore, transport).onStart()
+
+        assertNotNull(
+            "the feed only lists future items, so absence means nothing here",
+            db.recordatorioDao().getById(id),
+        )
+    }
+
+    // ── An expired row the server still holds must not ring or copy itself ───
+
+    @Test
+    fun aBackgroundSync_pushesWhatItRolled_soTheNextPullCannotBringItBack() = runTest {
+        val expired = System.currentTimeMillis() - 1_000L
+        db.recordatorioDao().insert(
+            RecordatorioEntity(
+                texto = "foro",
+                fecha = expired,
+                repeticion = "SEMANAL",
+                cloudKey = "weekly-1",
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+            ),
+        )
+        val transport = FakeTransport(Result.success(otherUserContent()))
+
+        CloudSync(context, db, sessionStore, transport).onBackgroundSync()
+
+        val pushedKeys = transport.pushed.last().recordatorios.map { it.cloudKey }
+        assertFalse("the expired row must leave the server", "weekly-1" in pushedKeys)
+        assertFalse(sessionStore.hasPendingPush)
+    }
+
+    @Test
+    fun aPull_collapsesCopiesOfOneReminderAndKeepsTheStoredRow() = runTest {
+        val fecha = System.currentTimeMillis() + 3_600_000L
+        val storedId = db.recordatorioDao().insert(
+            RecordatorioEntity(
+                texto = "foro",
+                fecha = fecha,
+                repeticion = "SEMANAL",
+                cloudKey = "copy-stored",
+                updatedAt = 1L,
+                fechaCreacion = 1L,
+                esAlarma = true,
+            ),
+        )
+        val copy = { key: String ->
+            AuthApi.SyncRecordatorioDto(
+                cloudKey = key,
+                texto = "foro",
+                fecha = fecha,
+                repeticion = "SEMANAL",
+                fechaCreacion = 1L,
+                updatedAt = 1L,
+            )
+        }
+        val remote = AuthApi.SyncSnapshot(
+            emptyList(),
+            emptyList(),
+            listOf(copy("copy-a"), copy("copy-b"), copy("copy-stored")),
+        )
+
+        CloudSync(context, db, sessionStore, FakeTransport(Result.success(remote))).onStart()
+
+        val rows = db.recordatorioDao().getAllOnce()
+        assertEquals(1, rows.size)
+        assertEquals(storedId, rows.single().id)
+        assertTrue("the server still holds the copies", sessionStore.hasPendingPush)
+    }
+
+    @Test
+    fun aMirrorStoredWithoutItsOrigin_isRestoredAndLeavesTheServerOnPush() = runTest {
+        val remote = AuthApi.parseSnapshot(
+            org.json.JSONObject(
+                """
+                {"recordatorios":[{"cloudKey":"limekatze:task:5","texto":"PDC",
+                "fecha":${System.currentTimeMillis() + 3_600_000L},"origin":"DAYTESK"}]}
+                """.trimIndent(),
+            ),
+        )
+
+        val sync = CloudSync(context, db, sessionStore, FakeTransport(Result.success(remote)))
+        sync.onStart()
+
+        val row = db.recordatorioDao().getAllOnce().single()
+        assertEquals("LIMEKATZE", row.origin)
+        assertEquals("task:5", row.remoteKey)
+        assertTrue("a mirror always alarms", row.esAlarma)
+    }
+
+    @Test
+    fun anOverdueTaskInTheFeed_isNeverInsertedSoItCannotRingOnEveryPull() = runTest {
         val remote = AuthApi.SyncSnapshot(
             contextos = emptyList(),
             tareas = emptyList(),
             recordatorios = listOf(
-                AuthApi.SyncRecordatorioDto(
-                    cloudKey = "remote-1",
-                    texto = "from another device",
-                    fecha = 1L,
-                    repeticion = "NINGUNA",
-                    fechaCreacion = 1L,
-                    updatedAt = 1L,
+                remoteRecordatorio(
+                    cloudKey = "limekatze:task:15",
+                    fecha = System.currentTimeMillis() - 86_400_000L,
+                    origin = "LIMEKATZE",
                 ),
+                remoteRecordatorio("rec-1"),
             ),
         )
-        val transport = FakeTransport(Result.success(remote))
+        val sync = CloudSync(context, db, sessionStore, FakeTransport(Result.success(remote)))
 
-        CloudSync(context, db, sessionStore, transport).onStart()
+        sync.onBackgroundSync()
+        sync.onBackgroundSync()
 
-        assertTrue("applying a snapshot must clear the snooze registry", SnoozeStore.all(context).isEmpty())
-        assertTrue("a snooze armed against replaced rows must be cancelled", snoozeAlarms().isEmpty())
+        assertEquals(
+            listOf("rec-1"),
+            db.recordatorioDao().getAllOnce().map { it.cloudKey },
+        )
+    }
+
+    @Test
+    fun aBackgroundSync_armsTheAlarmsOfTareasToo() = runTest {
+        val remote = AuthApi.SyncSnapshot(
+            contextos = emptyList(),
+            tareas = listOf(remoteTarea("tarea-1")),
+            recordatorios = emptyList(),
+        )
+
+        CloudSync(context, db, sessionStore, FakeTransport(Result.success(remote))).onBackgroundSync()
+
+        val id = db.tareaDao().getAllOnce().single().id
+        val alarms = shadowOf(context.getSystemService(Context.ALARM_SERVICE) as AlarmManager).scheduledAlarms
+        assertTrue(
+            "a tarea pulled in the background must not wait for the app to open",
+            alarms.any { shadowOf(it.operation).savedIntent.data.toString().contains("reminder/$id/") },
+        )
     }
 }

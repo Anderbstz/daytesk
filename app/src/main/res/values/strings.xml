@@ -3,4 +3,5 @@
     <string name="widget_description">Muestra la próxima tarea importante en la pantalla de inicio.</string>
     <string name="widget_recordatorio_description">Muestra el próximo recordatorio en la pantalla de inicio.</string>
     <string name="widget_recordatorio_empty">Sin recordatorios próximos</string>
+    <string name="widget_recordatorio_add">Nuevo recordatorio</string>
 </resources>

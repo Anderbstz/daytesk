@@ -28,6 +28,8 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -73,9 +75,9 @@ import java.util.UUID
  * Dialog-themed capture entry point launched by the home-screen widget.
  *
  * A widget's `RemoteViews` cannot host an editable field or an inline popup, so
- * tapping the widget opens this Activity instead. It collects the same three
- * inputs as [com.nuitcode.daytesk.ui.recordatorios.RecordatorioModal] — text,
- * a mandatory date and a repetition — reusing the existing date/time picker
+ * tapping the widget opens this Activity instead. It collects the same inputs as
+ * [com.nuitcode.daytesk.ui.recordatorios.RecordatorioModal] — text, a mandatory
+ * date, a repetition and the alarm mode — reusing the existing date/time picker
  * dialogs.
  *
  * Validation mirrors the modal: "Guardar" stays disabled until the text is not
@@ -136,6 +138,7 @@ private fun RecordatorioCaptureScreen(
     var texto by rememberSaveable { mutableStateOf("") }
     var fecha by rememberSaveable { mutableStateOf<Long?>(null) }
     var repeticion by rememberSaveable { mutableStateOf(Repeticion.NINGUNA) }
+    var esAlarma by rememberSaveable { mutableStateOf(false) }
     var showDatePicker by rememberSaveable { mutableStateOf(false) }
     var showTimePicker by rememberSaveable { mutableStateOf(false) }
     var pendingDateMillis by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -154,6 +157,7 @@ private fun RecordatorioCaptureScreen(
         cloudKey = UUID.randomUUID().toString(),
         fechaCreacion = System.currentTimeMillis(),
         updatedAt = System.currentTimeMillis(),
+        esAlarma = esAlarma,
     )
 
     Box(
@@ -256,6 +260,39 @@ private fun RecordatorioCaptureScreen(
                             )
                         }
                     }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = DayteskSpacing.lg)
+                        .semantics { testTag = "capture_recordatorio_alarm_switch" },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Modo alarma",
+                            style = DayteskTypography.bodySm,
+                            color = DayteskColors.TextPrimary,
+                        )
+                        Text(
+                            text = "Vibra hasta que lo cortes",
+                            style = DayteskTypography.caption,
+                            color = DayteskColors.TextSecondary,
+                        )
+                    }
+                    Switch(
+                        checked = esAlarma,
+                        onCheckedChange = { esAlarma = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = DayteskColors.Primary,
+                            checkedBorderColor = DayteskColors.Primary,
+                            uncheckedThumbColor = DayteskColors.TextSecondary,
+                            uncheckedTrackColor = DayteskColors.Surface,
+                            uncheckedBorderColor = DayteskColors.Border,
+                        ),
+                    )
                 }
 
                 Box(

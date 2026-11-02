@@ -1,6 +1,5 @@
 package com.nuitcode.daytesk.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
@@ -70,7 +69,10 @@ private val DayteskMaterialShapes = Shapes(
 
 @Composable
 fun DayteskTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    // Always light for now: every screen paints with the light `DayteskColors`, so
+    // following a dark system gave Material components (menus, dialogs, text
+    // fields) dark surfaces and light text over a light app.
+    darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme

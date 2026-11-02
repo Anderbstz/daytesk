@@ -12,18 +12,14 @@
     android:background="@drawable/widget_background"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="10dp">
-
-    <ImageView
-        android:layout_width="26dp"
-        android:layout_height="26dp"
-        android:contentDescription="@null"
-        android:src="@drawable/ic_widget_alarm" />
+    android:paddingStart="16dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="10dp"
         android:layout_weight="1"
         android:orientation="vertical">
 
@@ -32,7 +28,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
-            android:maxLines="1"
+            android:maxLines="2"
             android:text="@string/widget_recordatorio_empty"
             android:textColor="#1A1410"
             android:textSize="13sp"
@@ -51,12 +47,14 @@
 
     <TextView
         android:id="@+id/recordatorio_widget_add"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
         android:layout_marginStart="8dp"
+        android:background="@drawable/widget_add_button"
+        android:contentDescription="@string/widget_recordatorio_add"
         android:gravity="center"
         android:text="+"
-        android:textColor="#C46A3A"
-        android:textSize="18sp"
+        android:textColor="#FFFFFF"
+        android:textSize="22sp"
         android:textStyle="bold" />
 </LinearLayout>

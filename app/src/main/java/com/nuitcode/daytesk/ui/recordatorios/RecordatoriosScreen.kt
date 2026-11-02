@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,12 +27,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,26 +61,41 @@ import java.util.Locale
  * List of upcoming reminders ordered by `fecha` ascending (soonest first) —
  * the ordering is owned by `RecordatorioDao`.
  *
- * Tap a row to edit it, long-press to delete it. When `POST_NOTIFICATIONS` is
- * denied on API 33+ an in-screen banner offers a jump to the system settings.
+ * Tap a row to edit it, long-press to delete it. Creating lives in the floating
+ * button, like every other tab. When `POST_NOTIFICATIONS` is denied on API 33+ an
+ * in-screen banner offers a jump to the system settings.
  */
 @Composable
 fun RecordatoriosScreen(
     data: DayteskData,
     onEdit: (Recordatorio) -> Unit = {},
     onDelete: (Recordatorio) -> Unit = {},
-    onNew: () -> Unit = {},
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    var showSearch by remember { mutableStateOf(false) }
+    val visibles = filterRecordatorios(data.recordatorios, searchQuery)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(DayteskColors.Background)
             .semantics { testTag = "recordatorios_screen" },
     ) {
-        RecordatoriosTopBar(onNew = onNew)
+        RecordatoriosTopBar(
+            showSearch = showSearch,
+            searchQuery = searchQuery,
+            onSearchQueryChange = { searchQuery = it },
+            onToggleSearch = { showSearch = !showSearch },
+        )
         NotificationPermissionBanner()
-        if (data.recordatorios.isEmpty()) {
-            RecordatoriosEmptyState()
+        if (visibles.isEmpty()) {
+            RecordatoriosEmptyState(
+                message = if (data.recordatorios.isEmpty()) {
+                    "No tenés recordatorios próximos"
+                } else {
+                    "Ningún recordatorio coincide con la búsqueda"
+                },
+            )
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -86,7 +103,7 @@ fun RecordatoriosScreen(
                     .padding(horizontal = 20.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(data.recordatorios, key = { it.id }) { recordatorio ->
+                items(visibles, key = { it.id }) { recordatorio ->
                     RecordatorioRow(
                         recordatorio = recordatorio,
                         onClick = { onEdit(recordatorio) },
@@ -98,35 +115,61 @@ fun RecordatoriosScreen(
     }
 }
 
-/**
- * Top bar whose ENTIRE row is the create touch target, not just the "+ Nuevo"
- * glyph. The modifier order mirrors the Profile row (`PerfilScreen.kt`):
- * `clickable` BEFORE `padding`, then a minimum interactive height, so the whole
- * row — title included — is tappable and its hit area is at least 48dp.
- */
+/** Matches [com.nuitcode.daytesk.ui.tareas.TareasScreen]'s top bar and its search. */
 @Composable
-private fun RecordatoriosTopBar(onNew: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onNew() }
-            .padding(20.dp)
-            .heightIn(min = 48.dp)
-            .semantics { testTag = "recordatorios_new" },
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = "Recordatorios",
-            style = DayteskTypography.display,
-            color = DayteskColors.TextPrimary,
-            modifier = Modifier.semantics { testTag = "recordatorios_title" },
-        )
-        Text(
-            text = "+ Nuevo",
-            style = DayteskTypography.label.copy(color = DayteskColors.Primary),
-        )
+private fun RecordatoriosTopBar(
+    showSearch: Boolean,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    onToggleSearch: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Recordatorios",
+                style = DayteskTypography.display,
+                color = DayteskColors.TextPrimary,
+                modifier = Modifier.semantics { testTag = "recordatorios_title" },
+            )
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = "Buscar",
+                tint = if (showSearch) DayteskColors.Primary else DayteskColors.TextDisabled,
+                modifier = Modifier
+                    .size(22.dp)
+                    .clickable { onToggleSearch() }
+                    .semantics { testTag = "recordatorios_search" },
+            )
+        }
+        if (showSearch) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 12.dp),
+                placeholder = { Text("Buscar recordatorios") },
+                singleLine = true,
+            )
+        }
     }
+}
+
+/** A blank query keeps every row; otherwise the text must contain it. */
+internal fun filterRecordatorios(
+    recordatorios: List<Recordatorio>,
+    query: String,
+): List<Recordatorio> {
+    val needle = query.trim()
+    if (needle.isEmpty()) return recordatorios
+    return recordatorios.filter { it.texto.contains(needle, ignoreCase = true) }
 }
 
 /**
@@ -242,7 +285,7 @@ private fun RepeticionBadge(repeticion: Repeticion) {
 }
 
 @Composable
-private fun RecordatoriosEmptyState() {
+private fun RecordatoriosEmptyState(message: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -258,7 +301,7 @@ private fun RecordatoriosEmptyState() {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "No tenés recordatorios próximos",
+            text = message,
             style = DayteskTypography.bodyMd,
             color = DayteskColors.TextSecondary,
             modifier = Modifier.semantics { testTag = "recordatorios_empty" },

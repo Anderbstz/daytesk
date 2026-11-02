@@ -3,13 +3,14 @@ package com.nuitcode.daytesk.notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.media.AudioAttributes
 import androidx.core.app.NotificationCompat
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -43,7 +44,7 @@ class NotificationHelperTest {
     }
 
     @Test
-    fun createNotificationChannel_registersTheAlarmChannelWithAlarmSoundAndVibration() {
+    fun createNotificationChannel_registersTheAlarmChannelWithVibrationAndNoSound() {
         NotificationHelper.createNotificationChannel(context)
 
         val channel = manager.getNotificationChannel(NotificationHelper.CHANNEL_ID_ALARM)
@@ -51,12 +52,48 @@ class NotificationHelperTest {
         assertNotNull("the alarm channel must be created", channel)
         assertEquals(NotificationManager.IMPORTANCE_HIGH, channel.importance)
         assertTrue("the alarm channel must vibrate", channel.shouldVibrate())
-        assertNotNull("the alarm channel must own an alarm sound", channel.sound)
+        assertNull("DayTesk reminders must never play sound", channel.sound)
+    }
+
+    @Test
+    fun createNotificationChannel_noChannelPlaysSound() {
+        NotificationHelper.createNotificationChannel(context)
+
+        listOf(
+            NotificationHelper.CHANNEL_ID,
+            NotificationHelper.CHANNEL_ID_ALARM,
+            NotificationHelper.CHANNEL_ID_RING,
+        ).forEach { id ->
+            assertNull("$id must be silent", manager.getNotificationChannel(id).sound)
+        }
+    }
+
+    @Test
+    fun ringChannel_isHighImportanceSoItsFullScreenIntentCanTakeOver() {
+        NotificationHelper.createNotificationChannel(context)
+
         assertEquals(
-            "the channel sound must use alarm audio attributes",
-            AudioAttributes.USAGE_ALARM,
-            channel.audioAttributes.usage,
+            NotificationManager.IMPORTANCE_HIGH,
+            manager.getNotificationChannel(NotificationHelper.CHANNEL_ID_RING).importance,
         )
+    }
+
+    @Test
+    fun ringNotification_carriesTheFullScreenIntentAndTheAlarmCategory() {
+        val ring = NotificationHelper.buildRingNotification(context, 5L, "Call mom")
+
+        assertNotNull("the ring must be able to take the screen", ring.fullScreenIntent)
+        assertEquals(NotificationCompat.CATEGORY_ALARM, ring.category)
+    }
+
+    @Test
+    fun showRecordatorio_onlyAlarmModeTakesTheScreen() {
+        NotificationHelper.showRecordatorio(context, "Plain", 5L, esAlarma = false)
+        NotificationHelper.showRecordatorio(context, "Alarm", 6L, esAlarma = true)
+
+        val posted = postedNotifications()
+        assertNull(posted.single { it.extras.getCharSequence("android.text") == "Recordatorio: Plain" }.fullScreenIntent)
+        assertNotNull(posted.single { it.extras.getCharSequence("android.text") == "Recordatorio: Alarm" }.fullScreenIntent)
     }
 
     @Test
@@ -71,29 +108,31 @@ class NotificationHelperTest {
 
     @Test
     fun channelIds_areDistinct() {
-        // Channels are immutable: the vibration fix ships under a NEW id. The
-        // old "daytesk_alarm_reminders" id may exist on installed devices with
-        // the broken configuration and must never be reused.
-        assertEquals("daytesk_alarm_reminders_v2", NotificationHelper.CHANNEL_ID_ALARM)
+        // Channels are immutable: removing the sound ships under NEW ids. The old
+        // ids may exist on installed devices and must never be reused.
+        assertEquals("daytesk_alarm_reminders_v3", NotificationHelper.CHANNEL_ID_ALARM)
         assertNotEquals(NotificationHelper.CHANNEL_ID, NotificationHelper.CHANNEL_ID_ALARM)
+        assertFalse(NotificationHelper.CHANNEL_ID in NotificationHelper.LEGACY_CHANNEL_IDS)
+        assertFalse(NotificationHelper.CHANNEL_ID_ALARM in NotificationHelper.LEGACY_CHANNEL_IDS)
+        assertFalse(NotificationHelper.CHANNEL_ID_RING in NotificationHelper.LEGACY_CHANNEL_IDS)
     }
 
     @Test
-    fun createNotificationChannel_deletesTheLegacyAlarmChannel() {
-        val legacy = NotificationChannel(
-            NotificationHelper.CHANNEL_ID_ALARM_LEGACY,
-            "Recordatorios (alarma)",
-            NotificationManager.IMPORTANCE_HIGH,
-        )
-        manager.createNotificationChannel(legacy)
+    fun createNotificationChannel_deletesEveryLegacyChannel() {
+        NotificationHelper.LEGACY_CHANNEL_IDS.forEach { id ->
+            manager.createNotificationChannel(
+                NotificationChannel(id, "Legacy", NotificationManager.IMPORTANCE_HIGH),
+            )
+        }
 
         NotificationHelper.createNotificationChannel(context)
 
-        assertEquals(
-            "the immutable legacy channel must be cleaned up, not reused",
-            null,
-            manager.getNotificationChannel(NotificationHelper.CHANNEL_ID_ALARM_LEGACY),
-        )
+        NotificationHelper.LEGACY_CHANNEL_IDS.forEach { id ->
+            assertNull(
+                "the immutable legacy channel $id must be cleaned up, not reused",
+                manager.getNotificationChannel(id),
+            )
+        }
         assertNotNull(
             "the fresh alarm channel must exist",
             manager.getNotificationChannel(NotificationHelper.CHANNEL_ID_ALARM),

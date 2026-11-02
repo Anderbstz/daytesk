@@ -69,46 +69,71 @@ class AlarmVibrationStopTest {
     @After
     fun tearDown() {
         db.close()
+        AlarmVibrationService.ringing.value = emptyMap()
     }
 
     // ---------------------------------------------------------------- predicate
 
     @Test
-    fun shouldStop_matchingId_stopsTheRing() {
-        assertTrue(
-            "the ringing reminder's own id must stop it",
-            AlarmVibrationService.shouldStop(currentId = 71L, incomingId = 71L),
+    fun ringAfterStop_matchingId_removesOnlyThatReminder() {
+        assertEquals(
+            mapOf(72L to "b"),
+            AlarmVibrationService.ringAfterStop(mapOf(71L to "a", 72L to "b"), 71L),
         )
     }
 
     @Test
-    fun shouldStop_differentId_keepsTheOtherRingAlive() {
-        assertFalse(
+    fun ringAfterStop_differentId_keepsTheOtherRingAlive() {
+        assertEquals(
             "deleting reminder 72 must not silence the ring of reminder 71",
-            AlarmVibrationService.shouldStop(currentId = 71L, incomingId = 72L),
+            mapOf(71L to "a"),
+            AlarmVibrationService.ringAfterStop(mapOf(71L to "a"), 72L),
         )
     }
 
     @Test
-    fun shouldStop_missingIncomingId_stopsAnyRing() {
+    fun ringAfterStop_missingId_answersEverything() {
         assertTrue(
-            "a whole-identity invalidation has no id to compare, so it must stop anyway",
-            AlarmVibrationService.shouldStop(
-                currentId = 71L,
-                incomingId = AlarmVibrationService.NO_RECORDATORIO_ID,
-            ),
+            "Descartar and a whole-identity invalidation must leave nothing ringing",
+            AlarmVibrationService.ringAfterStop(
+                mapOf(71L to "a", 72L to "b"),
+                AlarmVibrationService.NO_RECORDATORIO_ID,
+            ).isEmpty(),
         )
     }
 
     @Test
-    fun shouldStop_withNothingRinging_letsTheServiceCleanUp() {
-        assertTrue(
-            "a stop delivered while nothing rings must still be allowed to finish the service",
-            AlarmVibrationService.shouldStop(
-                currentId = AlarmVibrationService.NO_RECORDATORIO_ID,
-                incomingId = 72L,
-            ),
+    fun ringAfterStop_withNothingRinging_letsTheServiceCleanUp() {
+        assertTrue(AlarmVibrationService.ringAfterStop(emptyMap(), 72L).isEmpty())
+    }
+
+    @Test
+    fun remindersDueTogether_shareOneRingAndOneDismissEndsIt() {
+        val service = Robolectric.buildService(AlarmVibrationService::class.java).create().get()
+        service.onStartCommand(startIntent(71L, "a"), 0, 0)
+        service.onStartCommand(startIntent(72L, "b"), 0, 1)
+        service.onStartCommand(startIntent(73L, "c"), 0, 2)
+        assertEquals(setOf(71L, 72L, 73L), AlarmVibrationService.ringing.value.keys)
+
+        service.onStartCommand(
+            Intent(app, AlarmVibrationService::class.java).apply {
+                action = AlarmVibrationService.ACTION_STOP
+            },
+            0,
+            3,
         )
+
+        assertTrue("one Descartar must end the whole ring", AlarmVibrationService.ringing.value.isEmpty())
+        assertTrue("nothing may stay armed after answering", timeoutAlarms().isEmpty())
+    }
+
+    @Test
+    fun aDismissedReminder_isNotRestartedByAnAlarmDeliveredLate() {
+        AlarmVibrationService.markAnswered(listOf("late copy"))
+
+        assertTrue(startAlarmVibrationOrFallback(context, 90L, "late copy"))
+
+        assertNull("a late copy must not vibrate again", shadowOf(app).nextStartedService)
     }
 
     // ------------------------------------------------------------ stop senders

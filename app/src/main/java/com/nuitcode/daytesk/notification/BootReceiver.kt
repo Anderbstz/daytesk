@@ -1,5 +1,6 @@
 package com.nuitcode.daytesk.notification
 
+import android.app.AlarmManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -12,9 +13,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/**
+ * Re-arms every alarm whenever the system may have dropped or downgraded them:
+ * a reboot, an app update, or the exact-alarm grant changing (an alarm armed
+ * while it was denied stays inexact until it is registered again).
+ */
 class BootReceiver : BroadcastReceiver() {
+    private companion object {
+        val REARM_ACTIONS = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+            AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED,
+        )
+    }
+
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action !in REARM_ACTIONS) return
         NotificationHelper.createNotificationChannel(context)
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {

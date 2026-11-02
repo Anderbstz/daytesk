@@ -37,9 +37,18 @@ class SnoozeReceiver : BroadcastReceiver() {
                 // Cancel first: if scheduling fails, the user still sees the
                 // tap acknowledged instead of a notification that looks dead.
                 dismissTappedNotification(context, intent)
-                // A ringing alarm must fall silent the moment the user snoozes.
-                if (esAlarma) AlarmVibrationService.stop(context)
                 ReminderScheduler.scheduleSnooze(context, id, texto, esAlarma = esAlarma)
+                if (esAlarma) {
+                    // The ring is one answer for everything in it: whatever came
+                    // due together is postponed together, not lost.
+                    val others = AlarmVibrationService.ringing.value - id
+                    others.forEach { (otherId, otherTexto) ->
+                        ReminderScheduler.scheduleSnooze(context, otherId, otherTexto, esAlarma = true)
+                    }
+                    AlarmVibrationService.markAnswered(others.values + texto)
+                    // A ringing alarm must fall silent the moment the user snoozes.
+                    AlarmVibrationService.stop(context)
+                }
             }
             ACTION_SNOOZE_FIRE -> {
                 // The alarm fired, so it is no longer pending in either the

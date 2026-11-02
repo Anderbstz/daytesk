@@ -6,6 +6,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
 import android.os.IBinder
@@ -13,6 +14,8 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.core.app.ServiceCompat
+import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Vibration-only alarm. **No audio is emitted anywhere in this path.**
@@ -20,11 +23,15 @@ import androidx.core.app.ServiceCompat
  * The service exists solely to keep the process alive while the vibrator runs:
  * Android cancels an app's vibration when its process dies, so a plain
  * `Vibrator.vibrate()` from a receiver would stop after a few seconds. It drives
- * the vibrator directly (not notification vibration) so Do Not Disturb cannot
- * suppress it.
+ * the vibrator directly (not notification vibration) with alarm usage, which is
+ * what lets it through silent mode, Do Not Disturb and battery saver.
+ *
+ * The ring surfaces like a clock alarm: [AlarmActivity] takes the screen, through
+ * the notification's full-screen intent when the platform decides so, and through
+ * a direct start otherwise.
  *
  * Lifecycle:
- *   - starts immediately with a silent low-importance notification;
+ *   - starts immediately with a silent high-importance notification;
  *   - repeats [ALARM_PATTERN] forever (`repeat = 0`);
  *   - arms a 2-minute safety stop that survives the notifications toggle;
  *   - cancels the vibration, the timeout and the notification on dismiss,
@@ -40,7 +47,7 @@ import androidx.core.app.ServiceCompat
 class AlarmVibrationService : Service() {
 
     private var vibrator: Vibrator? = null
-    private var currentId: Long = NO_RECORDATORIO_ID
+    private var timeoutId: Long = NO_RECORDATORIO_ID
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -51,7 +58,7 @@ class AlarmVibrationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> if (shouldStop(currentId, intent.recordatorioId())) stopRinging()
+            ACTION_STOP -> applyStop(intent.recordatorioId())
             ACTION_START -> startRinging(intent)
             else -> stopSelf()
         }
@@ -70,16 +77,24 @@ class AlarmVibrationService : Service() {
         // window to post this notification.
         startForegroundNow(id, texto)
 
-        if (currentId == id) {
+        val current = ringing.value
+        if (id in current) {
             // Same reminder re-fired: refresh the notification and leave the
             // already-looping vibration alone.
             return
         }
 
-        ReminderScheduler.cancelRingTimeout(this, currentId)
-        currentId = id
-        startVibration()
+        // Several reminders can come due together. They share one vibrator and
+        // one screen, so a later one joins the ring instead of replacing it:
+        // otherwise answering the first left the last one vibrating.
+        ringing.value = current + (id to texto)
+        if (current.isEmpty()) startVibration()
+        if (timeoutId != NO_RECORDATORIO_ID) ReminderScheduler.cancelRingTimeout(this, timeoutId)
+        timeoutId = id
         ReminderScheduler.setRingTimeout(this, id)
+        // Android may block this start in the background; the full-screen intent
+        // of the notification above is the path the platform always honours.
+        runCatching { startActivity(AlarmActivity.intent(this, id, texto)) }
     }
 
     private fun startForegroundNow(id: Long, texto: String) {
@@ -100,16 +115,27 @@ class AlarmVibrationService : Service() {
         }
         vibrator = target
         target.cancel()
-        target.vibrate(VibrationEffect.createWaveform(ALARM_PATTERN, ALARM_PATTERN_REPEAT))
+        target.vibrate(
+            VibrationEffect.createWaveform(ALARM_PATTERN, ALARM_PATTERN_REPEAT),
+            AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build(),
+        )
+    }
+
+    private fun applyStop(incomingId: Long) {
+        if (incomingId == NO_RECORDATORIO_ID) markAnswered(ringing.value.values)
+        val remaining = ringAfterStop(ringing.value, incomingId)
+        ringing.value = remaining
+        if (remaining.isEmpty()) stopRinging()
     }
 
     private fun stopRinging() {
         vibrator?.cancel()
         vibrator = null
-        if (currentId != NO_RECORDATORIO_ID) {
-            ReminderScheduler.cancelRingTimeout(this, currentId)
+        if (timeoutId != NO_RECORDATORIO_ID) {
+            ReminderScheduler.cancelRingTimeout(this, timeoutId)
         }
-        currentId = NO_RECORDATORIO_ID
+        timeoutId = NO_RECORDATORIO_ID
+        ringing.value = emptyMap()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.cancel(NotificationHelper.RING_NOTIFICATION_ID)
@@ -125,6 +151,28 @@ class AlarmVibrationService : Service() {
         const val ACTION_START = "com.nuitcode.daytesk.ALARM_VIBRATION_START"
         const val ACTION_STOP = "com.nuitcode.daytesk.ALARM_VIBRATION_STOP"
         private const val DISMISS_REQUEST_CODE = 8001
+
+        /** Reminders ringing now, id to text. [AlarmActivity] shows and answers them all. */
+        internal val ringing = MutableStateFlow<Map<Long, String>>(emptyMap())
+
+        private const val ANSWERED_WINDOW_MS = 60_000L
+        private val answeredAt = ConcurrentHashMap<String, Long>()
+
+        /** Records that the user just answered these reminders. */
+        internal fun markAnswered(textos: Collection<String>) {
+            val now = System.currentTimeMillis()
+            textos.forEach { answeredAt[it] = now }
+        }
+
+        /**
+         * True for a reminder the user answered moments ago. The system can
+         * deliver alarms of the same minute seconds apart, so a late copy must not
+         * start vibrating again right after "Descartar".
+         */
+        internal fun wasJustAnswered(texto: String): Boolean {
+            val at = answeredAt[texto] ?: return false
+            return System.currentTimeMillis() - at < ANSWERED_WINDOW_MS
+        }
 
         /**
          * Sentinel for "no reminder id". Also the marker of an unconditional
@@ -211,29 +259,23 @@ class AlarmVibrationService : Service() {
         }
 
         /**
-         * Whether an [ACTION_STOP] for [incomingId] may silence the ring that
-         * belongs to [currentId].
+         * What keeps ringing after an [ACTION_STOP] for [incomingId].
          *
-         * - a matching id stops the ring;
-         * - a different id leaves it alone, so one reminder's invalidation
-         *   cannot cut off another reminder that is ringing;
-         * - a missing id stops anyway, because a whole-identity invalidation has
-         *   no id to compare and can never leave a ring behind;
-         * - a stop that arrives while nothing rings is allowed through so the
-         *   service can clean up after itself.
+         * - a named id only removes that reminder, so one reminder's invalidation
+         *   cannot cut off another that is ringing;
+         * - a missing id empties the ring: "Descartar" answers everything on
+         *   screen, and a whole-identity invalidation can never leave one behind.
+         *
+         * The vibration stops once nothing is left.
          */
-        internal fun shouldStop(currentId: Long, incomingId: Long): Boolean {
-            if (currentId == NO_RECORDATORIO_ID) return true
-            if (incomingId == NO_RECORDATORIO_ID) return true
-            return incomingId == currentId
-        }
+        internal fun ringAfterStop(current: Map<Long, String>, incomingId: Long): Map<Long, String> =
+            if (incomingId == NO_RECORDATORIO_ID) emptyMap() else current - incomingId
 
-        /** "Descartar" action on the ringing notification. */
+        /** "Descartar" action on the ringing notification: answers the whole ring. */
         fun dismissPendingIntent(context: Context, id: Long): PendingIntent {
             val intent = Intent(context, AlarmVibrationService::class.java).apply {
                 action = ACTION_STOP
                 data = Uri.parse("daytesk://recordatorio/$id/dismiss")
-                putExtra(ReminderScheduler.EXTRA_RECORDATORIO_ID, id)
             }
             return PendingIntent.getService(
                 context,

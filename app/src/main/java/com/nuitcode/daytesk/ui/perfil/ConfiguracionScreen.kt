@@ -1,10 +1,7 @@
 package com.nuitcode.daytesk.ui.perfil
 
 import android.Manifest
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.nuitcode.daytesk.auth.SessionStore
+import com.nuitcode.daytesk.notification.AlarmPermissions
 import com.nuitcode.daytesk.notification.ReminderScheduler
 import com.nuitcode.daytesk.theme.DayteskColors
 import com.nuitcode.daytesk.theme.DayteskSpacing
@@ -119,21 +117,12 @@ fun ConfiguracionScreen(
             }
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-            !ReminderScheduler.canScheduleExactAlarms(context)
-        ) {
+        if (AlarmPermissions.needsAttention(context)) {
             TextButton(
-                onClick = {
-                    context.startActivity(
-                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        },
-                    )
-                },
+                onClick = { AlarmPermissions.openNextSetting(context) },
                 modifier = Modifier.padding(horizontal = DayteskSpacing.lg),
             ) {
-                Text("Permitir alarmas exactas", color = DayteskColors.Primary)
+                Text("Permisos de alarma", color = DayteskColors.Primary)
             }
         }
 

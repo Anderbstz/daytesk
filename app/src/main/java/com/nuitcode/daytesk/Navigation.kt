@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -35,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,6 +82,7 @@ import com.nuitcode.daytesk.sync.CloudSync
 import com.nuitcode.daytesk.widget.NextTaskWidgetProvider
 import com.nuitcode.daytesk.widget.RecordatorioWidgetProvider
 import com.nuitcode.daytesk.theme.DayteskColors
+import com.nuitcode.daytesk.theme.DayteskShapes
 import com.nuitcode.daytesk.theme.DayteskSpacing
 import com.nuitcode.daytesk.theme.DayteskTypography
 import com.nuitcode.daytesk.model.Contexto
@@ -87,6 +91,7 @@ import com.nuitcode.daytesk.ui.contextos.ContextosScreen
 import com.nuitcode.daytesk.ui.inicio.InicioScreen
 import com.nuitcode.daytesk.ui.main.DayteskUiState
 import com.nuitcode.daytesk.ui.main.MainScreenViewModel
+import com.nuitcode.daytesk.notification.AlarmPermissions
 import com.nuitcode.daytesk.notification.ReminderScheduler
 import com.nuitcode.daytesk.notification.applyNotificationsEnabled
 import com.nuitcode.daytesk.ui.historial.HistorialScreen
@@ -167,6 +172,7 @@ fun DayteskApp(
         is DayteskUiState.Success -> {
             cachedData = state.data
             RequestNotificationPermissionOnLaunch()
+            AlarmSetupPrompt(sessionStore)
             LaunchedEffect(state.data, syncReady) {
                 if (!syncReady) return@LaunchedEffect
                 archiveExpiredTasks(context, tareaDao)
@@ -366,6 +372,54 @@ private fun RequestNotificationPermissionOnLaunch() {
     }
 }
 
+/**
+ * Explains, once, the grants an alarm depends on. Configuración keeps a permanent
+ * way back to the same screens for anyone who dismisses this.
+ */
+@Composable
+private fun AlarmSetupPrompt(sessionStore: SessionStore) {
+    val context = LocalContext.current
+    var visible by remember {
+        mutableStateOf(!sessionStore.alarmSetupShown && AlarmPermissions.needsAttention(context))
+    }
+    if (!visible) return
+    val close = {
+        sessionStore.alarmSetupShown = true
+        visible = false
+    }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Permisos de alarma") },
+        text = {
+            val vendorHint = if (AlarmPermissions.isXiaomi()) {
+                " En Xiaomi activá además Inicio automático, Mostrar en pantalla de bloqueo y " +
+                    "Mostrar ventanas emergentes en segundo plano."
+            } else {
+                ""
+            }
+            Text(
+                "Para que las alarmas vibren a la hora exacta y ocupen la pantalla, " +
+                    "el sistema tiene que permitirlo." + vendorHint,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    AlarmPermissions.openNextSetting(context)
+                    close()
+                },
+            ) {
+                Text("Abrir ajustes")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = close) {
+                Text("Ahora no")
+            }
+        },
+    )
+}
+
 // ── Test entry point (read-only, no CRUD) ─────────────────────
 
 @Composable
@@ -460,7 +514,7 @@ private fun DayteskNavScaffold(
             when (currentEntry) {
                 is Recordatorios -> Fab(
                     onClick = onNewRecordatorio,
-                    icon = Icons.Default.Notifications,
+                    icon = Icons.Default.Add,
                     contentDescription = "Nuevo recordatorio",
                 )
                 is Inicio -> Box {
@@ -479,16 +533,21 @@ private fun DayteskNavScaffold(
                     DropdownMenu(
                         expanded = menu,
                         onDismissRequest = { menu = false },
+                        shape = DayteskShapes.medium,
+                        containerColor = DayteskColors.Surface,
+                        border = BorderStroke(1.dp, DayteskColors.Border),
                     ) {
-                        DropdownMenuItem(
-                            text = { Text("Nueva tarea") },
+                        FabMenuItem(
+                            label = "Nueva tarea",
+                            icon = Icons.Default.CheckCircle,
                             onClick = {
                                 menu = false
                                 onShowNuevaTarea()
                             },
                         )
-                        DropdownMenuItem(
-                            text = { Text("Nuevo recordatorio") },
+                        FabMenuItem(
+                            label = "Nuevo recordatorio",
+                            icon = Icons.Default.Notifications,
                             onClick = {
                                 menu = false
                                 onNewRecordatorio()
@@ -550,7 +609,6 @@ private fun DayteskNavScaffold(
                                 }
                             }
                         },
-                        onNew = onNewRecordatorio,
                     )
                 }
                 entry<Tareas> {
@@ -660,6 +718,31 @@ entry<Utilidades> {
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+
+@Composable
+private fun FabMenuItem(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                style = DayteskTypography.bodyMd,
+                color = DayteskColors.TextPrimary,
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = DayteskColors.Primary,
+            )
+        },
+        onClick = onClick,
+    )
+}
 
 @Composable
 private fun Fab(

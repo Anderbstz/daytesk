@@ -28,6 +28,11 @@ class SessionStore(context: Context) {
         get() = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
         set(value) { prefs.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, value).apply() }
 
+    /** Whether the alarm permissions prompt was already offered. */
+    var alarmSetupShown: Boolean
+        get() = prefs.getBoolean(KEY_ALARM_SETUP_SHOWN, false)
+        set(value) { prefs.edit().putBoolean(KEY_ALARM_SETUP_SHOWN, value).apply() }
+
     /**
      * `true` while a local change has not been confirmed by the server.
      *
@@ -143,6 +148,7 @@ class SessionStore(context: Context) {
         private const val KEY_HAD_ACCOUNT = "had_account"
         private const val KEY_PREVIOUS_EMAIL = "previous_email"
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
+        private const val KEY_ALARM_SETUP_SHOWN = "alarm_setup_shown"
         private const val KEY_PENDING_PUSH = "pending_push"
         private const val KEY_LAST_SYNC_ERROR = "last_sync_error"
     }

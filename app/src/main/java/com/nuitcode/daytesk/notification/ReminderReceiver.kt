@@ -168,6 +168,7 @@ internal fun shouldPostEarlyRecordatorioNotification(
  * service started. Never leaves the user with nothing.
  */
 internal fun startAlarmVibrationOrFallback(context: Context, id: Long, texto: String): Boolean {
+    if (AlarmVibrationService.wasJustAnswered(texto)) return true
     if (AlarmVibrationService.start(context, id, texto)) return true
     NotificationHelper.showRecordatorio(context, texto, id, early = false, esAlarma = true)
     return false
